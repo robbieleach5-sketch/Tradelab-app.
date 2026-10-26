@@ -81,7 +81,7 @@ def intraday_prices(ticker):
     secret = os.environ.get("APCA_API_SECRET_KEY")
     if not key or not secret:
         raise RuntimeError("Alpaca credentials missing: set GitHub Actions secrets")
-    symbol = ticker.replace("BRK.B", "BRK.B")
+    symbol = ticker
     start = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat().replace("+00:00", "Z")
     params = urllib.parse.urlencode({"feed": "iex", "timeframe": "5Min",
                                      "start": start, "limit": 1000, "sort": "asc"})
@@ -123,7 +123,7 @@ def main():
         state["updated_utc"] = now.isoformat()
         state["model"] = "Alpaca IEX configuration required; trading paused"
         STATE.parent.mkdir(parents=True, exist_ok=True)
-        STATE.write_text(json.dumps(state, indent=2)+"\\n")
+        STATE.write_text(json.dumps(state, indent=2)+"\n")
         print("Alpaca credentials not configured; no simulated trades placed")
         return
     state["errors"].pop("ALPACA_CONFIG", None)
