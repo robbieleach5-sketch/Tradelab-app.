@@ -1,6 +1,11 @@
 name: Twelve Data virtual trading
 on:
   workflow_dispatch:
+  # Also test the paper engine when this workflow file itself changes.
+  # State-file updates do not match this path, avoiding an infinite run loop.
+  push:
+    paths:
+      - '.github/workflows/paper-trading.yml'
   schedule:
     # Every 15 minutes, 14:00–22:00 UK local time (GMT/BST).
     # The job below checks Europe/London time and exits outside the window.
