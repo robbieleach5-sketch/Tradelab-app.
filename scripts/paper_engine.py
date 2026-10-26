@@ -75,35 +75,34 @@ def load_state():
     return {"cash_gbp": START_GBP, "positions": {}, "trades": [], "last_processed": {}}
 
 def intraday_prices(ticker):
-    """Read free real-time IEX 5-minute bars from Alpaca; never fall back to Yahoo."""
-    from datetime import timedelta
-    key = os.environ.get("APCA_API_KEY_ID")
-    secret = os.environ.get("APCA_API_SECRET_KEY")
-    if not key or not secret:
-        raise RuntimeError("Alpaca credentials missing: set GitHub Actions secrets")
-    symbol = ticker
-    start = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat().replace("+00:00", "Z")
-    params = urllib.parse.urlencode({"feed": "iex", "timeframe": "5Min",
-                                     "start": start, "limit": 1000, "sort": "asc"})
-    url = ("https://data.alpaca.markets/v2/stocks/"
-           + urllib.parse.quote(symbol, safe="") + "/bars?" + params)
-    req = urllib.request.Request(url, headers={
-        "APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret,
-        "Accept": "application/json"})
+    """Twelve Data 5-minute US stock bars. No fallback to Yahoo or Alpaca."""
+    from zoneinfo import ZoneInfo
+    key = os.environ.get("TWELVE_DATA_API_KEY")
+    if not key:
+        raise RuntimeError("Missing GitHub Actions secret TWELVE_DATA_API_KEY")
+    params = urllib.parse.urlencode({"symbol": ticker, "interval": "5min",
+                                      "outputsize": 90, "timezone": "America/New_York"})
+    req = urllib.request.Request("https://api.twelvedata.com/time_series?" + params,
+                                 headers={"Authorization": "apikey " + key,
+                                          "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=15) as response:
         payload = json.load(response)
+    if payload.get("status") == "error" or "values" not in payload:
+        raise ValueError("Twelve Data: " + str(payload.get("message", "No bars returned"))[:130])
     rows = []
-    for item in payload.get("bars", []):
+    tz = ZoneInfo("America/New_York")
+    for item in payload["values"]:
         try:
-            timestamp = datetime.fromisoformat(item["t"].replace("Z", "+00:00"))
-            o, h, low, close = (float(item[k]) for k in ("o", "h", "l", "c"))
+            stamp = datetime.strptime(item["datetime"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
+            o, h, low, close = (float(item[k]) for k in ("open", "high", "low", "close"))
             if min(o, h, low, close) > 0:
-                rows.append({"timestamp": int(timestamp.timestamp()),
-                             "open": o, "high": h, "low": low, "close": close})
-        except (KeyError, TypeError, ValueError):
+                rows.append({"timestamp": int(stamp.timestamp()), "open": o,
+                             "high": h, "low": low, "close": close})
+        except (KeyError, ValueError, TypeError):
             continue
+    rows.sort(key=lambda x: x["timestamp"])
     if not rows:
-        raise ValueError("No IEX 5-minute bars returned")
+        raise ValueError("No valid Twelve Data bars")
     return rows
 
 def main():
@@ -118,16 +117,24 @@ def main():
     for key, default in (("last_processed_intraday", {}), ("errors", {}), ("quotes", {}),
                          ("events", []), ("positions", {}), ("trades", [])):
         state.setdefault(key, default)
-    if not os.environ.get("APCA_API_KEY_ID") or not os.environ.get("APCA_API_SECRET_KEY"):
-        state["errors"]["ALPACA_CONFIG"] = "Missing GitHub Actions secrets APCA_API_KEY_ID and/or APCA_API_SECRET_KEY"
+    if not os.environ.get("TWELVE_DATA_API_KEY"):
+        state["errors"]["DATA_CONFIG"] = "Missing GitHub Actions secret TWELVE_DATA_API_KEY"
         state["updated_utc"] = now.isoformat()
-        state["model"] = "Alpaca IEX configuration required; trading paused"
+        state["model"] = "Twelve Data configuration required; trading paused"
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text(json.dumps(state, indent=2)+"\n")
-        print("Alpaca credentials not configured; no simulated trades placed")
+        print("Twelve Data key not configured; no simulated trades placed")
         return
-    state["errors"].pop("ALPACA_CONFIG", None)
-    for ticker in SYMBOLS:
+    state["errors"].pop("DATA_CONFIG", None)
+    # Free tier: 8 credits/minute and 800/day. Check open positions first;
+    # rotate 5 additional symbols per 15-minute run to stay under limits.
+    universe = list(SYMBOLS)
+    slot = int(now.timestamp() // 900)
+    start = (slot * 5) % len(universe)
+    rotating = [universe[(start + k) % len(universe)] for k in range(5)]
+    watchlist = list(state["positions"])[:3] + [s for s in rotating if s not in state["positions"]]
+    watchlist = watchlist[:8]
+    for ticker in watchlist:
         try:
             rows = intraday_prices(ticker)
             # Only fully completed candles; provider may include an unfinished current candle.
@@ -138,7 +145,7 @@ def main():
             bar_time = datetime.fromtimestamp(bar["timestamp"], timezone.utc)
             ny_bar = bar_time.astimezone(ZoneInfo("America/New_York"))
             state["quotes"][ticker] = {"date": bar_time.isoformat(), "close_usd": round(bar["close"], 4),
-                                       "source": "Alpaca IEX 5-minute bars (single exchange)"}
+                                       "source": "Twelve Data 5-minute bars (limited-venue US feed)"}
             # Never trade old candles or repeat a previously processed candle.
             if not regular or ny_bar.date() != ny.date() or (now - bar_time) > timedelta(minutes=25):
                 state["errors"].pop(ticker, None)
@@ -194,7 +201,7 @@ def main():
         except Exception as exc:
             state["errors"][ticker] = str(exc)[:200]
     state["updated_utc"] = now.isoformat()
-    state["model"] = ("Educational intraday 5-minute paper simulator; Alpaca free IEX-only data. "
+    state["model"] = ("Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. "
                       "Proxy fills at observed candle closes; no live broker execution.")
     state["assumptions"] = {"usd_per_gbp_fixed": USD_PER_GBP, "max_risk_gbp": RISK_GBP,
                             "stop_pct": STOP_PCT*100, "target_pct": TARGET_PCT*100,
