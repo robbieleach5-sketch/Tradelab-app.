@@ -2,7 +2,9 @@ name: Daily virtual trading
 on:
   workflow_dispatch:
   schedule:
-    - cron: '35 22 * * 1-5'
+    # Every 15 minutes, 14:00–22:00 UK local time (GMT/BST).
+    # The job below checks Europe/London time and exits outside the window.
+    - cron: '*/15 13-22 * * 1-5'
 permissions:
   contents: write
 concurrency:
@@ -12,15 +14,30 @@ jobs:
   paper:
     runs-on: ubuntu-latest
     steps:
+      - name: Check UK trading window
+        id: window
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          from datetime import datetime, time
+          from zoneinfo import ZoneInfo
+          now = datetime.now(ZoneInfo('Europe/London'))
+          allowed = now.weekday() < 5 and time(14, 0) <= now.time() <= time(21, 0)
+          print(f'run={str(allowed).lower()}')
+          print(f'uk_time={now.isoformat()}')
+          PY
       - uses: actions/checkout@v4
+        if: steps.window.outputs.run == 'true'
         with:
           persist-credentials: true
       - uses: actions/setup-python@v5
+        if: steps.window.outputs.run == 'true'
         with:
           python-version: '3.12'
       - name: Update virtual trades from daily market data
+        if: steps.window.outputs.run == 'true'
         run: python scripts/paper_engine.py
       - name: Save simulated portfolio snapshot
+        if: steps.window.outputs.run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
