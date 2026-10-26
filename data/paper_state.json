@@ -192,8 +192,8 @@
       "source": "Stooq daily historical CSV"
     },
     "NOW": {
-      "date": "2026-10-26T14:55:00+00:00",
-      "close_usd": 157.29,
+      "date": "2026-10-26T16:25:00+00:00",
+      "close_usd": 155.7,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "UBER": {
@@ -272,29 +272,29 @@
       "source": "Stooq daily historical CSV"
     },
     "ABBV": {
-      "date": "2026-10-26",
-      "close_usd": 288.6549987792969,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T16:25:00+00:00",
+      "close_usd": 286.36,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "XOM": {
-      "date": "2026-10-26T14:55:00+00:00",
-      "close_usd": 183.255,
+      "date": "2026-10-26T16:25:00+00:00",
+      "close_usd": 183.86,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CVX": {
-      "date": "2026-10-26",
-      "close_usd": 233.36000061035156,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T16:25:00+00:00",
+      "close_usd": 232.35,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CAT": {
-      "date": "2026-10-26",
-      "close_usd": 684.1199951171875,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T16:25:00+00:00",
+      "close_usd": 694.195,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "DE": {
-      "date": "2026-10-26",
-      "close_usd": 629.4099731445312,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T16:25:00+00:00",
+      "close_usd": 638.43,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "WMT": {
       "date": "2026-10-26",
@@ -326,7 +326,7 @@
     "2026-10-26 NOW opened virtual long",
     "2026-10-26 XOM opened virtual long"
   ],
-  "updated_utc": "2026-10-26T15:02:36.837701+00:00",
+  "updated_utc": "2026-10-26T16:31:50.353379+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -336,12 +336,16 @@
     "round_trip_cost_pct": 0.2
   },
   "last_processed_intraday": {
-    "NOW": 1793026500,
-    "XOM": 1793026500,
+    "NOW": 1793031900,
+    "XOM": 1793031900,
     "PLTR": 1793026500,
     "CRWD": 1793026500,
     "NET": 1793026500,
     "ORCL": 1793026500,
-    "CRM": 1793026500
+    "CRM": 1793026500,
+    "ABBV": 1793031900,
+    "CVX": 1793031900,
+    "CAT": 1793031900,
+    "DE": 1793031900
   }
 }
