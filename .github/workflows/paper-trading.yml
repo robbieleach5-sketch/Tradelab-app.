@@ -1,4 +1,4 @@
-name: Daily virtual trading
+name: Alpaca IEX virtual trading
 on:
   workflow_dispatch:
   schedule:
@@ -33,8 +33,11 @@ jobs:
         if: steps.window.outputs.run == 'true'
         with:
           python-version: '3.12'
-      - name: Update virtual trades from daily market data
+      - name: Update virtual trades from Alpaca IEX data
         if: steps.window.outputs.run == 'true'
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
         run: python scripts/paper_engine.py
       - name: Save simulated portfolio snapshot
         if: steps.window.outputs.run == 'true'
