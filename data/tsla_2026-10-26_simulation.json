@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-26",
+  "symbol": "TSLA",
+  "mode": "virtual_only",
+  "initial_balance_gbp": 100,
+  "balance_gbp": 100,
+  "max_planned_risk_per_trade_gbp": 2,
+  "daily_loss_limit_gbp": 4,
+  "entry_conditions": "Confirmed break and hold above $381, above VWAP, supporting volume; stop $379, target $385 only if valid at entry",
+  "assumptions": {
+    "fx": "No conversion applied without executed virtual trade; for potential fills use timestamped GBPUSD spot or explicitly assumed FX",
+    "bid_ask_spread": "Assume $0.04 round-trip (not observed) only for candidate trades",
+    "slippage": "Assume $0.03/share per side (not observed) only for candidate trades",
+    "fractional_shares": true,
+    "fees": "Assume £0 commission unless venue/broker otherwise specified"
+  },
+  "trades": [],
+  "events": [
+    {
+      "time_utc": "2026-10-26T16:08:26Z",
+      "time_et": "2026-10-26T12:08:26-04:00",
+      "type": "setup_invalidated",
+      "reason": "Public timestamped quote source showed TSLA opened at $384.77, session low $384.34, and traded around $394.26 at 11:09 ET. The $381 breakout was already bypassed and $385 target below current market; cannot enter with positive reward. No reliable 5m VWAP/volume confirmation. No fill claimed.",
+      "source": "https://www.investing.com/equities/tesla-motors-historical-data"
+    }
+  ],
+  "session_status": "setup_invalidated_no_entry"
+}
