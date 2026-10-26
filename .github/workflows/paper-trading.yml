@@ -1,4 +1,5 @@
 name: Twelve Data virtual trading
+run-name: TradeLab scan (${{ github.event_name }})
 on:
   workflow_dispatch:
   # Also test the paper engine when this workflow file itself changes.
@@ -7,9 +8,9 @@ on:
     paths:
       - '.github/workflows/paper-trading.yml'
   schedule:
-    # About every 15 minutes on weekdays; avoid top-of-hour congestion.
-    # The job below checks Europe/London time and exits outside 14:00–21:00 UK.
-    - cron: '8,23,38,53 13-22 * * 1-5'
+    # About every 15 minutes on weekdays, UTC, away from top-of-hour traffic.
+    # Check both UK 2pm start and US regular trading hours in the job.
+    - cron: '9,24,39,54 12-21 * * 1-5'
 permissions:
   contents: write
 concurrency:
@@ -23,12 +24,23 @@ jobs:
         id: window
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
-          from datetime import datetime, time
+          from datetime import datetime, time, timezone
           from zoneinfo import ZoneInfo
-          now = datetime.now(ZoneInfo('Europe/London'))
-          allowed = now.weekday() < 5 and time(14, 0) <= now.time() <= time(21, 0)
+          import os
+          utc = datetime.now(timezone.utc)
+          uk = utc.astimezone(ZoneInfo('Europe/London'))
+          ny = utc.astimezone(ZoneInfo('America/New_York'))
+          market = ny.weekday() < 5 and time(9, 35) <= ny.time() < time(16, 0)
+          window = uk.weekday() < 5 and uk.time() >= time(14, 0)
+          # Manual and code-change runs verify the pipeline, even after hours.
+          # The Python engine itself refuses virtual entries outside US hours.
+          event = os.environ.get('GITHUB_EVENT_NAME', '')
+          allowed = (market and window) or event in ('push', 'workflow_dispatch')
           print(f'run={str(allowed).lower()}')
-          print(f'uk_time={now.isoformat()}')
+          print(f'uk_time={uk.isoformat()}')
+          print(f'ny_time={ny.isoformat()}')
+          print(f'market_session_open={str(market).lower()}')
+          print(f'trigger={event}')
           PY
       - uses: actions/checkout@v4
         if: steps.window.outputs.run == 'true'
