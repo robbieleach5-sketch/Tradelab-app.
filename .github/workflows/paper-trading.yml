@@ -7,9 +7,9 @@ on:
     paths:
       - '.github/workflows/paper-trading.yml'
   schedule:
-    # Every 15 minutes, 14:00–22:00 UK local time (GMT/BST).
-    # The job below checks Europe/London time and exits outside the window.
-    - cron: '*/15 13-22 * * 1-5'
+    # About every 15 minutes on weekdays; avoid top-of-hour congestion.
+    # The job below checks Europe/London time and exits outside 14:00–21:00 UK.
+    - cron: '8,23,38,53 13-22 * * 1-5'
 permissions:
   contents: write
 concurrency:
