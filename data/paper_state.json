@@ -122,29 +122,29 @@
       "source": "Stooq daily historical CSV"
     },
     "PLTR": {
-      "date": "2026-10-26",
-      "close_usd": 194.2100067138672,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T14:55:00+00:00",
+      "close_usd": 198.575,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CRWD": {
-      "date": "2026-10-26",
-      "close_usd": 256.2550048828125,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T14:55:00+00:00",
+      "close_usd": 263.66,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "NET": {
-      "date": "2026-10-26",
-      "close_usd": 317.0,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T14:55:00+00:00",
+      "close_usd": 331.695,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "ORCL": {
-      "date": "2026-10-26",
-      "close_usd": 123.94000244140625,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T14:55:00+00:00",
+      "close_usd": 127.65,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CRM": {
-      "date": "2026-10-26",
-      "close_usd": 247.05999755859375,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T14:55:00+00:00",
+      "close_usd": 248.0,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "ADBE": {
       "date": "2026-10-26",
@@ -192,9 +192,9 @@
       "source": "Stooq daily historical CSV"
     },
     "NOW": {
-      "date": "2026-10-26",
-      "close_usd": 156.35800170898438,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T14:55:00+00:00",
+      "close_usd": 157.29,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "UBER": {
       "date": "2026-10-26",
@@ -277,9 +277,9 @@
       "source": "Stooq daily historical CSV"
     },
     "XOM": {
-      "date": "2026-10-26",
-      "close_usd": 183.8000030517578,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T14:55:00+00:00",
+      "close_usd": 183.255,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CVX": {
       "date": "2026-10-26",
@@ -326,13 +326,22 @@
     "2026-10-26 NOW opened virtual long",
     "2026-10-26 XOM opened virtual long"
   ],
-  "updated_utc": "2026-10-26T14:04:32.943435+00:00",
-  "model": "Educational daily OHLC simulator. Long-only. Historical daily feed may be delayed. No live execution.",
+  "updated_utc": "2026-10-26T15:02:36.837701+00:00",
+  "model": "Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
     "max_risk_gbp": 10.0,
     "stop_pct": 2.0,
     "target_pct": 4.0,
     "round_trip_cost_pct": 0.2
+  },
+  "last_processed_intraday": {
+    "NOW": 1793026500,
+    "XOM": 1793026500,
+    "PLTR": 1793026500,
+    "CRWD": 1793026500,
+    "NET": 1793026500,
+    "ORCL": 1793026500,
+    "CRM": 1793026500
   }
 }
