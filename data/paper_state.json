@@ -201,29 +201,29 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "UBER": {
-      "date": "2026-10-26",
-      "close_usd": 66.30999755859375,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T19:55:00+00:00",
+      "close_usd": 66.125,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "SHOP": {
-      "date": "2026-10-26",
-      "close_usd": 169.19000244140625,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T19:55:00+00:00",
+      "close_usd": 168.21,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "COIN": {
-      "date": "2026-10-26",
-      "close_usd": 156.22000122070312,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T19:55:00+00:00",
+      "close_usd": 159.585,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "PYPL": {
-      "date": "2026-10-26",
-      "close_usd": 55.790000915527344,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-26T19:55:00+00:00",
+      "close_usd": 54.96,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "SQ": {
-      "date": "2026-10-26",
-      "close_usd": 74.31999969482422,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-23T19:55:00+00:00",
+      "close_usd": 76.47,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "JPM": {
       "date": "2026-10-26",
@@ -281,8 +281,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "XOM": {
-      "date": "2026-10-26T17:35:00+00:00",
-      "close_usd": 184.195,
+      "date": "2026-10-26T19:55:00+00:00",
+      "close_usd": 184.545,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CVX": {
@@ -331,7 +331,7 @@
     "2026-10-26 XOM opened virtual long",
     "2026-10-26T17:35:00+00:00 NOW closed gap below stop"
   ],
-  "updated_utc": "2026-10-26T17:44:37.547121+00:00",
+  "updated_utc": "2026-10-26T20:48:55.142624+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -352,5 +352,8 @@
     "CVX": 1793031900,
     "CAT": 1793031900,
     "DE": 1793031900
-  }
+  },
+  "run_event": "push",
+  "run_id": "40398959918",
+  "market_session_open": false
 }
