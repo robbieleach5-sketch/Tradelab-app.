@@ -135,64 +135,107 @@ def load_state():
             pass
     return {"cash_gbp": START_GBP, "positions": {}, "trades": [], "last_processed": {}}
 
-def main():
-    state = load_state()
-    state.setdefault("last_processed", {})
-    state.setdefault("errors", {})
-    state.setdefault("quotes", {})
-    state.setdefault("events", [])
-    for ticker, code in SYMBOLS.items():
+def intraday_prices(ticker):
+    """Yahoo 5-minute candles; no daily-bar fallback or invented live prices."""
+    symbol = ticker.replace("BRK.B", "BRK-B")
+    url = ("https://query1.finance.yahoo.com/v8/finance/chart/"
+           + urllib.parse.quote(symbol, safe="-") + "?range=5d&interval=5m")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=12) as response:
+        payload = json.load(response)
+    result = payload["chart"]["result"][0]
+    quote = result["indicators"]["quote"][0]
+    rows = []
+    for i, ts in enumerate(result["timestamp"]):
         try:
-            rows = prices(code)
-            bar = rows[-1]
-            date = bar["date"]
-            state["quotes"][ticker] = {"date": date, "close_usd": bar["close"], "source": "Stooq daily historical CSV"}
-            if state["last_processed"].get(ticker) == date:
+            o, h, l, close = (float(quote[k][i]) for k in ("open", "high", "low", "close"))
+            if min(o, h, l, close) > 0:
+                rows.append({"timestamp": int(ts), "open": o, "high": h, "low": l, "close": close})
+        except (TypeError, ValueError, IndexError):
+            pass
+    return rows
+
+def main():
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    now = datetime.now(timezone.utc)
+    ny = now.astimezone(ZoneInfo("America/New_York"))
+    # Avoid trading premarket, weekends and the last 15 minutes of regular session.
+    regular = ny.weekday() < 5 and (9, 35) <= (ny.hour, ny.minute) < (16, 0)
+    allow_entry = regular and (ny.hour, ny.minute) < (15, 45)
+    state = load_state()
+    for key, default in (("last_processed_intraday", {}), ("errors", {}), ("quotes", {}),
+                         ("events", []), ("positions", {}), ("trades", [])):
+        state.setdefault(key, default)
+    for ticker in SYMBOLS:
+        try:
+            rows = intraday_prices(ticker)
+            # Only fully completed candles; provider may include an unfinished current candle.
+            completed = [b for b in rows if b["timestamp"] + 300 <= int(now.timestamp()) - 30]
+            if not completed:
+                raise ValueError("No completed 5-minute candles")
+            bar = completed[-1]
+            bar_time = datetime.fromtimestamp(bar["timestamp"], timezone.utc)
+            ny_bar = bar_time.astimezone(ZoneInfo("America/New_York"))
+            state["quotes"][ticker] = {"date": bar_time.isoformat(), "close_usd": round(bar["close"], 4),
+                                       "source": "Yahoo Finance 5-minute candles (may be delayed)"}
+            # Never trade old candles or repeat a previously processed candle.
+            if not regular or ny_bar.date() != ny.date() or (now - bar_time) > timedelta(minutes=25):
+                state["errors"].pop(ticker, None)
+                continue
+            if bar["timestamp"] <= state["last_processed_intraday"].get(ticker, 0):
+                state["errors"].pop(ticker, None)
                 continue
             position = state["positions"].get(ticker)
             if position:
-                exit_price = None
-                reason = None
-                if bar["open"] <= position["stop_usd"]:
-                    exit_price, reason = bar["open"], "gap below stop"
-                elif bar["open"] >= position["target_usd"]:
-                    exit_price, reason = bar["open"], "gap above target"
-                elif bar["low"] <= position["stop_usd"]:
-                    exit_price, reason = position["stop_usd"], "stop"
-                elif bar["high"] >= position["target_usd"]:
-                    exit_price, reason = position["target_usd"], "target"
-                if exit_price is not None:
-                    # 0.20% approximate round-trip costs; does not model financing.
+                # Existing positions from the daily engine remain open; only process candles
+                # strictly after their entry timestamp when present. Legacy positions are
+                # treated as already open, not newly entered.
+                if bar["low"] <= position["stop_usd"] or bar["high"] >= position["target_usd"]:
+                    # Conservative stop-first assumption if both levels touched in one candle.
+                    reason = "stop" if bar["low"] <= position["stop_usd"] else "target"
+                    exit_price = position["stop_usd"] if reason == "stop" else position["target_usd"]
+                    if bar["open"] < position["stop_usd"]:
+                        exit_price, reason = bar["open"], "gap below stop"
+                    elif bar["open"] > position["target_usd"]:
+                        exit_price, reason = bar["open"], "gap above target"
                     pnl = (exit_price-position["entry_usd"])*position["qty"]/USD_PER_GBP
                     costs = (exit_price+position["entry_usd"])*position["qty"]/USD_PER_GBP*0.001
                     pnl = round(pnl-costs, 2)
                     state["cash_gbp"] = round(state["cash_gbp"]+pnl, 2)
-                    state["trades"].append({"ticker": ticker, "entry_date": position["date"], "exit_date": date,
-                                            "entry_usd": position["entry_usd"], "exit_usd": exit_price,
-                                            "qty": position["qty"], "pnl_gbp": pnl, "reason": reason})
+                    state["trades"].append({"ticker": ticker, "entry_date": position["date"],
+                        "exit_date": bar_time.isoformat(), "entry_usd": position["entry_usd"],
+                        "exit_usd": exit_price, "qty": position["qty"], "pnl_gbp": pnl, "reason": reason})
                     del state["positions"][ticker]
-                    state["events"].append(date+" "+ticker+" closed "+reason)
-            # Do not open and close on same bar as an existing position.
-            elif signal(rows) and len(state["positions"]) < 3:
-                entry = bar["open"]
-                stop = entry*(1-STOP_PCT)
-                target = entry*(1+TARGET_PCT)
-                risk_qty = RISK_GBP*USD_PER_GBP/(entry-stop)
-                # Cap exposure to available cash, accounting for other positions.
-                reserved = sum(p["entry_usd"]*p["qty"]/USD_PER_GBP for p in state["positions"].values())
-                available = max(0, state["cash_gbp"]-reserved)
-                qty = round(max(0, min(risk_qty, available*USD_PER_GBP/entry)), 5)
-                if qty > 0:
-                    state["positions"][ticker] = {"date": date, "entry_usd": entry, "stop_usd": round(stop, 4),
-                                                   "target_usd": round(target, 4), "qty": qty}
-                    state["events"].append(date+" "+ticker+" opened virtual long")
-                    # This model intentionally does NOT assess same-day stop/target for new positions.
-            state["last_processed"][ticker] = date
+                    state["events"].append(bar_time.isoformat()+" "+ticker+" closed "+reason)
+            elif allow_entry and len(state["positions"]) < 3:
+                # Use completed candles only; buy at latest observed close, not a past open.
+                # This is a proxy fill, not a broker-executable quote.
+                previous = completed[:-1]
+                if len(previous) >= 50:
+                    last20 = sum(b["close"] for b in previous[-20:])/20
+                    last50 = sum(b["close"] for b in previous[-50:])/50
+                    breakout = bar["close"] > max(b["high"] for b in previous[-20:])
+                    if last20 > last50 and breakout:
+                        entry = bar["close"]
+                        stop, target = entry*(1-STOP_PCT), entry*(1+TARGET_PCT)
+                        risk_qty = RISK_GBP*USD_PER_GBP/(entry-stop)
+                        reserved = sum(p["entry_usd"]*p["qty"]/USD_PER_GBP
+                                       for p in state["positions"].values())
+                        available = max(0, state["cash_gbp"]-reserved)
+                        qty = round(max(0, min(risk_qty, available*USD_PER_GBP/entry)), 5)
+                        if qty > 0:
+                            state["positions"][ticker] = {"date": bar_time.isoformat(),
+                                "entry_usd": entry, "stop_usd": round(stop, 4),
+                                "target_usd": round(target, 4), "qty": qty}
+                            state["events"].append(bar_time.isoformat()+" "+ticker+" opened virtual long (5m)")
+            state["last_processed_intraday"][ticker] = bar["timestamp"]
             state["errors"].pop(ticker, None)
         except Exception as exc:
             state["errors"][ticker] = str(exc)[:200]
-    state["updated_utc"] = datetime.now(timezone.utc).isoformat()
-    state["model"] = "Educational daily OHLC simulator. Long-only. Historical daily feed may be delayed. No live execution."
+    state["updated_utc"] = now.isoformat()
+    state["model"] = ("Educational intraday 5-minute paper simulator; Yahoo data may be delayed. "
+                      "Proxy fills at observed candle closes; no live broker execution.")
     state["assumptions"] = {"usd_per_gbp_fixed": USD_PER_GBP, "max_risk_gbp": RISK_GBP,
                             "stop_pct": STOP_PCT*100, "target_pct": TARGET_PCT*100,
                             "round_trip_cost_pct": 0.2}
@@ -200,7 +243,7 @@ def main():
     state["trades"] = state["trades"][-500:]
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text(json.dumps(state, indent=2)+"\n")
-    print("Updated", state["updated_utc"], "positions", len(state["positions"]), "errors", state["errors"])
+    print("Updated", state["updated_utc"], "positions", len(state["positions"]), "errors", len(state["errors"]))
 
 if __name__ == "__main__":
     main()
