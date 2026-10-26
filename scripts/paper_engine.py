@@ -201,6 +201,9 @@ def main():
         except Exception as exc:
             state["errors"][ticker] = str(exc)[:200]
     state["updated_utc"] = now.isoformat()
+    state["run_event"] = os.environ.get("GITHUB_EVENT_NAME", "local")
+    state["run_id"] = os.environ.get("GITHUB_RUN_ID", "")
+    state["market_session_open"] = regular
     state["model"] = ("Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. "
                       "Proxy fills at observed candle closes; no live broker execution.")
     state["assumptions"] = {"usd_per_gbp_fixed": USD_PER_GBP, "max_risk_gbp": RISK_GBP,
