@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Daily educational paper-trading engine. Never connects to a broker."""
-import csv, io, json, os, urllib.request
+import csv, io, json, os, urllib.request, urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -65,22 +65,52 @@ TARGET_PCT = 0.04
 USD_PER_GBP = 1.33
 
 def prices(symbol):
-    url = "https://stooq.com/q/d/l/?s=" + symbol + "&i=d"
-    req = urllib.request.Request(url, headers={"User-Agent": "TradeLab educational paper simulator/1.0"})
-    with urllib.request.urlopen(req, timeout=25) as response:
-        data = response.read().decode("utf-8-sig")
+    """Try Yahoo daily chart first, then Stooq. Reject unusable feeds explicitly."""
     rows = []
-    for r in csv.DictReader(io.StringIO(data)):
+    errors = []
+    yahoo_symbol = symbol.upper().replace(".US", "").replace("BRK-B", "BRK-B")
+    url = ("https://query1.finance.yahoo.com/v8/finance/chart/"
+           + urllib.parse.quote(yahoo_symbol, safe="-")
+           + "?range=2y&interval=1d")
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; TradeLabPaper/1.0)",
+            "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=12) as response:
+            payload = json.load(response)
+        result = payload["chart"]["result"][0]
+        quotes = result["indicators"]["quote"][0]
+        for i, timestamp in enumerate(result["timestamp"]):
+            try:
+                o, h, l, c = (float(quotes[k][i]) for k in ("open", "high", "low", "close"))
+                if min(o, h, l, c) <= 0:
+                    continue
+                day = datetime.fromtimestamp(timestamp, timezone.utc).strftime("%Y-%m-%d")
+                rows.append({"date": day, "open": o, "high": h, "low": l, "close": c})
+            except (TypeError, ValueError, IndexError):
+                continue
+    except Exception as exc:
+        errors.append("Yahoo: " + str(exc)[:100])
+    if len(rows) < 75:
+        rows = []
         try:
-            row = {"date": r["Date"], "open": float(r["Open"]), "high": float(r["High"]),
-                   "low": float(r["Low"]), "close": float(r["Close"])}
-            if min(row["open"], row["high"], row["low"], row["close"]) > 0:
-                rows.append(row)
-        except (KeyError, ValueError, TypeError):
-            continue
+            url = "https://stooq.com/q/d/l/?s=" + urllib.parse.quote(symbol) + "&i=d"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=12) as response:
+                data = response.read().decode("utf-8-sig")
+            for r in csv.DictReader(io.StringIO(data)):
+                try:
+                    row = {"date": r["Date"], "open": float(r["Open"]), "high": float(r["High"]),
+                           "low": float(r["Low"]), "close": float(r["Close"])}
+                    if min(row["open"], row["high"], row["low"], row["close"]) > 0:
+                        rows.append(row)
+                except (KeyError, ValueError, TypeError):
+                    continue
+        except Exception as exc:
+            errors.append("Stooq: " + str(exc)[:100])
     rows.sort(key=lambda r: r["date"])
     if len(rows) < 75:
-        raise ValueError("Insufficient price history")
+        raise ValueError("Only %d valid bars. %s" % (len(rows), "; ".join(errors)))
     return rows[-250:]
 
 def sma(rows, end, n):
@@ -113,7 +143,7 @@ def main():
     state.setdefault("events", [])
     for ticker, code in SYMBOLS.items():
         try:
-            rows = prices(code)
+            rows = prices(code.replace(".us", "") if ticker != "BRK.B" else "BRK-B")
             bar = rows[-1]
             date = bar["date"]
             state["quotes"][ticker] = {"date": date, "close_usd": bar["close"], "source": "Stooq daily historical CSV"}
