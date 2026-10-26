@@ -1,63 +1,332 @@
 {
   "cash_gbp": 1000.0,
-  "positions": {},
-  "trades": [],
-  "last_processed": {},
-  "errors": {
-    "TSLA": "Insufficient price history",
-    "NVDA": "Insufficient price history",
-    "AAPL": "Insufficient price history",
-    "MSFT": "Insufficient price history",
-    "AMZN": "Insufficient price history",
-    "GOOGL": "Insufficient price history",
-    "META": "Insufficient price history",
-    "AVGO": "Insufficient price history",
-    "AMD": "Insufficient price history",
-    "NFLX": "Insufficient price history",
-    "PLTR": "Insufficient price history",
-    "CRWD": "Insufficient price history",
-    "NET": "Insufficient price history",
-    "ORCL": "Insufficient price history",
-    "CRM": "Insufficient price history",
-    "ADBE": "Insufficient price history",
-    "INTC": "Insufficient price history",
-    "MU": "Insufficient price history",
-    "QCOM": "Insufficient price history",
-    "TXN": "Insufficient price history",
-    "AMAT": "Insufficient price history",
-    "LRCX": "Insufficient price history",
-    "KLAC": "Insufficient price history",
-    "PANW": "Insufficient price history",
-    "NOW": "Insufficient price history",
-    "UBER": "Insufficient price history",
-    "SHOP": "Insufficient price history",
-    "COIN": "Insufficient price history",
-    "PYPL": "Insufficient price history",
-    "SQ": "Insufficient price history",
-    "JPM": "Insufficient price history",
-    "BAC": "Insufficient price history",
-    "GS": "Insufficient price history",
-    "MS": "Insufficient price history",
-    "V": "Insufficient price history",
-    "MA": "Insufficient price history",
-    "BRK.B": "Insufficient price history",
-    "UNH": "Insufficient price history",
-    "JNJ": "Insufficient price history",
-    "LLY": "Insufficient price history",
-    "ABBV": "Insufficient price history",
-    "XOM": "Insufficient price history",
-    "CVX": "Insufficient price history",
-    "CAT": "Insufficient price history",
-    "DE": "Insufficient price history",
-    "WMT": "Insufficient price history",
-    "COST": "Insufficient price history",
-    "SPY": "Insufficient price history",
-    "QQQ": "Insufficient price history",
-    "IWM": "Insufficient price history"
+  "positions": {
+    "NOW": {
+      "date": "2026-10-26",
+      "entry_usd": 158.5500030517578,
+      "stop_usd": 155.379,
+      "target_usd": 164.892,
+      "qty": 4.19426
+    },
+    "XOM": {
+      "date": "2026-10-26",
+      "entry_usd": 181.86000061035156,
+      "stop_usd": 178.2228,
+      "target_usd": 189.1344,
+      "qty": 3.65666
+    }
   },
-  "quotes": {},
-  "events": [],
-  "updated_utc": "2026-10-26T14:01:36.987409+00:00",
+  "trades": [],
+  "last_processed": {
+    "TSLA": "2026-10-26",
+    "NVDA": "2026-10-26",
+    "AAPL": "2026-10-26",
+    "MSFT": "2026-10-26",
+    "AMZN": "2026-10-26",
+    "GOOGL": "2026-10-26",
+    "META": "2026-10-26",
+    "AVGO": "2026-10-26",
+    "AMD": "2026-10-26",
+    "NFLX": "2026-10-26",
+    "PLTR": "2026-10-26",
+    "CRWD": "2026-10-26",
+    "NET": "2026-10-26",
+    "ORCL": "2026-10-26",
+    "CRM": "2026-10-26",
+    "ADBE": "2026-10-26",
+    "INTC": "2026-10-26",
+    "MU": "2026-10-26",
+    "QCOM": "2026-10-26",
+    "TXN": "2026-10-26",
+    "AMAT": "2026-10-26",
+    "LRCX": "2026-10-26",
+    "KLAC": "2026-10-26",
+    "PANW": "2026-10-26",
+    "NOW": "2026-10-26",
+    "UBER": "2026-10-26",
+    "SHOP": "2026-10-26",
+    "COIN": "2026-10-26",
+    "PYPL": "2026-10-26",
+    "SQ": "2026-10-26",
+    "JPM": "2026-10-26",
+    "BAC": "2026-10-26",
+    "GS": "2026-10-26",
+    "MS": "2026-10-26",
+    "V": "2026-10-26",
+    "MA": "2026-10-26",
+    "BRK.B": "2026-10-26",
+    "UNH": "2026-10-26",
+    "JNJ": "2026-10-26",
+    "LLY": "2026-10-26",
+    "ABBV": "2026-10-26",
+    "XOM": "2026-10-26",
+    "CVX": "2026-10-26",
+    "CAT": "2026-10-26",
+    "DE": "2026-10-26",
+    "WMT": "2026-10-26",
+    "COST": "2026-10-26",
+    "SPY": "2026-10-26",
+    "QQQ": "2026-10-26",
+    "IWM": "2026-10-26"
+  },
+  "errors": {},
+  "quotes": {
+    "TSLA": {
+      "date": "2026-10-26",
+      "close_usd": 394.0201110839844,
+      "source": "Stooq daily historical CSV"
+    },
+    "NVDA": {
+      "date": "2026-10-26",
+      "close_usd": 214.72560119628906,
+      "source": "Stooq daily historical CSV"
+    },
+    "AAPL": {
+      "date": "2026-10-26",
+      "close_usd": 343.57000732421875,
+      "source": "Stooq daily historical CSV"
+    },
+    "MSFT": {
+      "date": "2026-10-26",
+      "close_usd": 524.4000244140625,
+      "source": "Stooq daily historical CSV"
+    },
+    "AMZN": {
+      "date": "2026-10-26",
+      "close_usd": 248.60499572753906,
+      "source": "Stooq daily historical CSV"
+    },
+    "GOOGL": {
+      "date": "2026-10-26",
+      "close_usd": 318.1400146484375,
+      "source": "Stooq daily historical CSV"
+    },
+    "META": {
+      "date": "2026-10-26",
+      "close_usd": 631.8049926757812,
+      "source": "Stooq daily historical CSV"
+    },
+    "AVGO": {
+      "date": "2026-10-26",
+      "close_usd": 324.7666015625,
+      "source": "Stooq daily historical CSV"
+    },
+    "AMD": {
+      "date": "2026-10-26",
+      "close_usd": 516.239990234375,
+      "source": "Stooq daily historical CSV"
+    },
+    "NFLX": {
+      "date": "2026-10-26",
+      "close_usd": 64.98500061035156,
+      "source": "Stooq daily historical CSV"
+    },
+    "PLTR": {
+      "date": "2026-10-26",
+      "close_usd": 194.2100067138672,
+      "source": "Stooq daily historical CSV"
+    },
+    "CRWD": {
+      "date": "2026-10-26",
+      "close_usd": 256.2550048828125,
+      "source": "Stooq daily historical CSV"
+    },
+    "NET": {
+      "date": "2026-10-26",
+      "close_usd": 317.0,
+      "source": "Stooq daily historical CSV"
+    },
+    "ORCL": {
+      "date": "2026-10-26",
+      "close_usd": 123.94000244140625,
+      "source": "Stooq daily historical CSV"
+    },
+    "CRM": {
+      "date": "2026-10-26",
+      "close_usd": 247.05999755859375,
+      "source": "Stooq daily historical CSV"
+    },
+    "ADBE": {
+      "date": "2026-10-26",
+      "close_usd": 260.8500061035156,
+      "source": "Stooq daily historical CSV"
+    },
+    "INTC": {
+      "date": "2026-10-26",
+      "close_usd": 87.16999816894531,
+      "source": "Stooq daily historical CSV"
+    },
+    "MU": {
+      "date": "2026-10-26",
+      "close_usd": 889.0499877929688,
+      "source": "Stooq daily historical CSV"
+    },
+    "QCOM": {
+      "date": "2026-10-26",
+      "close_usd": 176.01499938964844,
+      "source": "Stooq daily historical CSV"
+    },
+    "TXN": {
+      "date": "2026-10-26",
+      "close_usd": 286.08770751953125,
+      "source": "Stooq daily historical CSV"
+    },
+    "AMAT": {
+      "date": "2026-10-26",
+      "close_usd": 380.7799987792969,
+      "source": "Stooq daily historical CSV"
+    },
+    "LRCX": {
+      "date": "2026-10-26",
+      "close_usd": 234.8300018310547,
+      "source": "Stooq daily historical CSV"
+    },
+    "KLAC": {
+      "date": "2026-10-26",
+      "close_usd": 148.4600067138672,
+      "source": "Stooq daily historical CSV"
+    },
+    "PANW": {
+      "date": "2026-10-26",
+      "close_usd": 383.6300048828125,
+      "source": "Stooq daily historical CSV"
+    },
+    "NOW": {
+      "date": "2026-10-26",
+      "close_usd": 156.35800170898438,
+      "source": "Stooq daily historical CSV"
+    },
+    "UBER": {
+      "date": "2026-10-26",
+      "close_usd": 66.30999755859375,
+      "source": "Stooq daily historical CSV"
+    },
+    "SHOP": {
+      "date": "2026-10-26",
+      "close_usd": 169.19000244140625,
+      "source": "Stooq daily historical CSV"
+    },
+    "COIN": {
+      "date": "2026-10-26",
+      "close_usd": 156.22000122070312,
+      "source": "Stooq daily historical CSV"
+    },
+    "PYPL": {
+      "date": "2026-10-26",
+      "close_usd": 55.790000915527344,
+      "source": "Stooq daily historical CSV"
+    },
+    "SQ": {
+      "date": "2026-10-26",
+      "close_usd": 74.31999969482422,
+      "source": "Stooq daily historical CSV"
+    },
+    "JPM": {
+      "date": "2026-10-26",
+      "close_usd": 335.260986328125,
+      "source": "Stooq daily historical CSV"
+    },
+    "BAC": {
+      "date": "2026-10-26",
+      "close_usd": 51.150001525878906,
+      "source": "Stooq daily historical CSV"
+    },
+    "GS": {
+      "date": "2026-10-26",
+      "close_usd": 886.4099731445312,
+      "source": "Stooq daily historical CSV"
+    },
+    "MS": {
+      "date": "2026-10-26",
+      "close_usd": 182.9149932861328,
+      "source": "Stooq daily historical CSV"
+    },
+    "V": {
+      "date": "2026-10-26",
+      "close_usd": 406.5950012207031,
+      "source": "Stooq daily historical CSV"
+    },
+    "MA": {
+      "date": "2026-10-26",
+      "close_usd": 618.9959716796875,
+      "source": "Stooq daily historical CSV"
+    },
+    "BRK.B": {
+      "date": "2026-10-26",
+      "close_usd": 544.97998046875,
+      "source": "Stooq daily historical CSV"
+    },
+    "UNH": {
+      "date": "2026-10-26",
+      "close_usd": 419.385009765625,
+      "source": "Stooq daily historical CSV"
+    },
+    "JNJ": {
+      "date": "2026-10-26",
+      "close_usd": 271.6000061035156,
+      "source": "Stooq daily historical CSV"
+    },
+    "LLY": {
+      "date": "2026-10-26",
+      "close_usd": 1286.3800048828125,
+      "source": "Stooq daily historical CSV"
+    },
+    "ABBV": {
+      "date": "2026-10-26",
+      "close_usd": 288.6549987792969,
+      "source": "Stooq daily historical CSV"
+    },
+    "XOM": {
+      "date": "2026-10-26",
+      "close_usd": 183.8000030517578,
+      "source": "Stooq daily historical CSV"
+    },
+    "CVX": {
+      "date": "2026-10-26",
+      "close_usd": 233.36000061035156,
+      "source": "Stooq daily historical CSV"
+    },
+    "CAT": {
+      "date": "2026-10-26",
+      "close_usd": 684.1199951171875,
+      "source": "Stooq daily historical CSV"
+    },
+    "DE": {
+      "date": "2026-10-26",
+      "close_usd": 629.4099731445312,
+      "source": "Stooq daily historical CSV"
+    },
+    "WMT": {
+      "date": "2026-10-26",
+      "close_usd": 121.33999633789062,
+      "source": "Stooq daily historical CSV"
+    },
+    "COST": {
+      "date": "2026-10-26",
+      "close_usd": 1011.094970703125,
+      "source": "Stooq daily historical CSV"
+    },
+    "SPY": {
+      "date": "2026-10-26",
+      "close_usd": 763.2150268554688,
+      "source": "Stooq daily historical CSV"
+    },
+    "QQQ": {
+      "date": "2026-10-26",
+      "close_usd": 707.0399780273438,
+      "source": "Stooq daily historical CSV"
+    },
+    "IWM": {
+      "date": "2026-10-26",
+      "close_usd": 276.93499755859375,
+      "source": "Stooq daily historical CSV"
+    }
+  },
+  "events": [
+    "2026-10-26 NOW opened virtual long",
+    "2026-10-26 XOM opened virtual long"
+  ],
+  "updated_utc": "2026-10-26T14:04:32.943435+00:00",
   "model": "Educational daily OHLC simulator. Long-only. Historical daily feed may be delayed. No live execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
