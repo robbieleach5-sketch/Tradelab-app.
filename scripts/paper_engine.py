@@ -68,7 +68,7 @@ def prices(symbol):
     """Try Yahoo daily chart first, then Stooq. Reject unusable feeds explicitly."""
     rows = []
     errors = []
-    yahoo_symbol = symbol.upper().replace(".US", "").replace("BRK-B", "BRK-B")
+    yahoo_symbol = symbol.upper().removesuffix(".US").replace("BRK-B", "BRK-B")
     url = ("https://query1.finance.yahoo.com/v8/finance/chart/"
            + urllib.parse.quote(yahoo_symbol, safe="-")
            + "?range=2y&interval=1d")
@@ -143,7 +143,7 @@ def main():
     state.setdefault("events", [])
     for ticker, code in SYMBOLS.items():
         try:
-            rows = prices(code.replace(".us", "") if ticker != "BRK.B" else "BRK-B")
+            rows = prices(code)
             bar = rows[-1]
             date = bar["date"]
             state["quotes"][ticker] = {"date": date, "close_usd": bar["close"], "source": "Stooq daily historical CSV"}
