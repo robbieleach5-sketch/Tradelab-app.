@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Daily educational paper-trading engine. Never connects to a broker."""
-import csv, io, json, os, urllib.request, urllib.parse
+"""Alpaca IEX intraday educational paper engine. No broker orders."""
+import json, os, urllib.request, urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -64,67 +64,6 @@ TARGET_PCT = 0.04
 # Fixed conversion assumption, NOT a live FX rate.
 USD_PER_GBP = 1.33
 
-def prices(symbol):
-    """Try Yahoo daily chart first, then Stooq. Reject unusable feeds explicitly."""
-    rows = []
-    errors = []
-    yahoo_symbol = symbol.upper().removesuffix(".US").replace("BRK-B", "BRK-B")
-    url = ("https://query1.finance.yahoo.com/v8/finance/chart/"
-           + urllib.parse.quote(yahoo_symbol, safe="-")
-           + "?range=2y&interval=1d")
-    try:
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "Mozilla/5.0 (compatible; TradeLabPaper/1.0)",
-            "Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=12) as response:
-            payload = json.load(response)
-        result = payload["chart"]["result"][0]
-        quotes = result["indicators"]["quote"][0]
-        for i, timestamp in enumerate(result["timestamp"]):
-            try:
-                o, h, l, c = (float(quotes[k][i]) for k in ("open", "high", "low", "close"))
-                if min(o, h, l, c) <= 0:
-                    continue
-                day = datetime.fromtimestamp(timestamp, timezone.utc).strftime("%Y-%m-%d")
-                rows.append({"date": day, "open": o, "high": h, "low": l, "close": c})
-            except (TypeError, ValueError, IndexError):
-                continue
-    except Exception as exc:
-        errors.append("Yahoo: " + str(exc)[:100])
-    if len(rows) < 75:
-        rows = []
-        try:
-            url = "https://stooq.com/q/d/l/?s=" + urllib.parse.quote(symbol) + "&i=d"
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=12) as response:
-                data = response.read().decode("utf-8-sig")
-            for r in csv.DictReader(io.StringIO(data)):
-                try:
-                    row = {"date": r["Date"], "open": float(r["Open"]), "high": float(r["High"]),
-                           "low": float(r["Low"]), "close": float(r["Close"])}
-                    if min(row["open"], row["high"], row["low"], row["close"]) > 0:
-                        rows.append(row)
-                except (KeyError, ValueError, TypeError):
-                    continue
-        except Exception as exc:
-            errors.append("Stooq: " + str(exc)[:100])
-    rows.sort(key=lambda r: r["date"])
-    if len(rows) < 75:
-        raise ValueError("Only %d valid bars. %s" % (len(rows), "; ".join(errors)))
-    return rows[-250:]
-
-def sma(rows, end, n):
-    return sum(r["close"] for r in rows[end-n:end]) / n
-
-def signal(rows):
-    # Signal on prior completed session, enter at latest session's open.
-    prev = len(rows) - 1
-    if prev < 71:
-        return False
-    prior = rows[:prev]
-    return (sma(prior, len(prior), 20) > sma(prior, len(prior), 50)
-            and prior[-1]["close"] > max(x["high"] for x in prior[-21:-1]))
-
 def load_state():
     if STATE.exists():
         try:
@@ -136,23 +75,35 @@ def load_state():
     return {"cash_gbp": START_GBP, "positions": {}, "trades": [], "last_processed": {}}
 
 def intraday_prices(ticker):
-    """Yahoo 5-minute candles; no daily-bar fallback or invented live prices."""
-    symbol = ticker.replace("BRK.B", "BRK-B")
-    url = ("https://query1.finance.yahoo.com/v8/finance/chart/"
-           + urllib.parse.quote(symbol, safe="-") + "?range=5d&interval=5m")
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=12) as response:
+    """Read free real-time IEX 5-minute bars from Alpaca; never fall back to Yahoo."""
+    from datetime import timedelta
+    key = os.environ.get("APCA_API_KEY_ID")
+    secret = os.environ.get("APCA_API_SECRET_KEY")
+    if not key or not secret:
+        raise RuntimeError("Alpaca credentials missing: set GitHub Actions secrets")
+    symbol = ticker.replace("BRK.B", "BRK.B")
+    start = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat().replace("+00:00", "Z")
+    params = urllib.parse.urlencode({"feed": "iex", "timeframe": "5Min",
+                                     "start": start, "limit": 1000, "sort": "asc"})
+    url = ("https://data.alpaca.markets/v2/stocks/"
+           + urllib.parse.quote(symbol, safe="") + "/bars?" + params)
+    req = urllib.request.Request(url, headers={
+        "APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret,
+        "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=15) as response:
         payload = json.load(response)
-    result = payload["chart"]["result"][0]
-    quote = result["indicators"]["quote"][0]
     rows = []
-    for i, ts in enumerate(result["timestamp"]):
+    for item in payload.get("bars", []):
         try:
-            o, h, l, close = (float(quote[k][i]) for k in ("open", "high", "low", "close"))
-            if min(o, h, l, close) > 0:
-                rows.append({"timestamp": int(ts), "open": o, "high": h, "low": l, "close": close})
-        except (TypeError, ValueError, IndexError):
-            pass
+            timestamp = datetime.fromisoformat(item["t"].replace("Z", "+00:00"))
+            o, h, low, close = (float(item[k]) for k in ("o", "h", "l", "c"))
+            if min(o, h, low, close) > 0:
+                rows.append({"timestamp": int(timestamp.timestamp()),
+                             "open": o, "high": h, "low": low, "close": close})
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not rows:
+        raise ValueError("No IEX 5-minute bars returned")
     return rows
 
 def main():
@@ -167,6 +118,15 @@ def main():
     for key, default in (("last_processed_intraday", {}), ("errors", {}), ("quotes", {}),
                          ("events", []), ("positions", {}), ("trades", [])):
         state.setdefault(key, default)
+    if not os.environ.get("APCA_API_KEY_ID") or not os.environ.get("APCA_API_SECRET_KEY"):
+        state["errors"]["ALPACA_CONFIG"] = "Missing GitHub Actions secrets APCA_API_KEY_ID and/or APCA_API_SECRET_KEY"
+        state["updated_utc"] = now.isoformat()
+        state["model"] = "Alpaca IEX configuration required; trading paused"
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(json.dumps(state, indent=2)+"\\n")
+        print("Alpaca credentials not configured; no simulated trades placed")
+        return
+    state["errors"].pop("ALPACA_CONFIG", None)
     for ticker in SYMBOLS:
         try:
             rows = intraday_prices(ticker)
@@ -178,7 +138,7 @@ def main():
             bar_time = datetime.fromtimestamp(bar["timestamp"], timezone.utc)
             ny_bar = bar_time.astimezone(ZoneInfo("America/New_York"))
             state["quotes"][ticker] = {"date": bar_time.isoformat(), "close_usd": round(bar["close"], 4),
-                                       "source": "Yahoo Finance 5-minute candles (may be delayed)"}
+                                       "source": "Alpaca IEX 5-minute bars (single exchange)"}
             # Never trade old candles or repeat a previously processed candle.
             if not regular or ny_bar.date() != ny.date() or (now - bar_time) > timedelta(minutes=25):
                 state["errors"].pop(ticker, None)
@@ -234,7 +194,7 @@ def main():
         except Exception as exc:
             state["errors"][ticker] = str(exc)[:200]
     state["updated_utc"] = now.isoformat()
-    state["model"] = ("Educational intraday 5-minute paper simulator; Yahoo data may be delayed. "
+    state["model"] = ("Educational intraday 5-minute paper simulator; Alpaca free IEX-only data. "
                       "Proxy fills at observed candle closes; no live broker execution.")
     state["assumptions"] = {"usd_per_gbp_fixed": USD_PER_GBP, "max_risk_gbp": RISK_GBP,
                             "stop_pct": STOP_PCT*100, "target_pct": TARGET_PCT*100,
