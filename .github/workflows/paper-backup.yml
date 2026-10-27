@@ -1,0 +1,88 @@
+name: TradeLab fallback paper scan
+run-name: TradeLab backup (${{ github.event_name }})
+on:
+  workflow_dispatch:
+  # A workflow-file change performs one safe startup test.
+  push:
+    paths:
+      - '.github/workflows/paper-backup.yml'
+  schedule:
+    # Independent backstop, twice an hour, staggered from main cron.
+    - cron: '17,47 8-21 * * 1-5'
+permissions:
+  contents: write
+concurrency:
+  group: tradelab-paper-engine
+  cancel-in-progress: false
+jobs:
+  fallback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Check whether paper scanner is overdue
+        id: stale
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from datetime import datetime, timedelta, time, timezone
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+          now = datetime.now(timezone.utc)
+          uk = now.astimezone(ZoneInfo('Europe/London'))
+          ny = now.astimezone(ZoneInfo('America/New_York'))
+          in_window = (uk.weekday() < 5 and uk.time() >= time(9, 0)
+                       and ny.weekday() < 5 and ny.time() < time(16, 0))
+          try:
+              state = json.loads(Path('data/paper_state.json').read_text())
+              updated = datetime.fromisoformat(state['updated_utc'])
+              updated = updated if updated.tzinfo else updated.replace(tzinfo=timezone.utc)
+              age = now - updated.astimezone(timezone.utc)
+          except (OSError, ValueError, KeyError, TypeError):
+              age = timedelta(days=1)
+          # GitHub cron is best-effort. Do not call limited data unless
+          # the main snapshot is more than 25 minutes behind.
+          needed = in_window and age >= timedelta(minutes=25)
+          print(f'run={str(needed).lower()}')
+          print(f'uk_time={uk.isoformat()}')
+          print(f'minutes_since_snapshot={round(age.total_seconds()/60, 1)}')
+          print(f'backup_needed={str(needed).lower()}')
+          PY
+      - uses: actions/setup-python@v5
+        if: steps.stale.outputs.run == 'true'
+        with:
+          python-version: '3.12'
+      - name: Update overdue virtual positions and scanner
+        if: steps.stale.outputs.run == 'true'
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        run: |
+          if [ -z "$TWELVE_DATA_API_KEY" ]; then
+            echo "::error::Missing TWELVE_DATA_API_KEY secret"
+            exit 1
+          fi
+          python scripts/paper_engine.py
+      - name: Publish catch-up paper snapshot
+        if: steps.stale.outputs.run == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/paper_state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update daily paper portfolio (backup)"
+            for attempt in 1 2 3; do
+              git fetch origin main
+              if ! git rebase origin/main; then
+                git rebase --abort || true
+                echo "Backup portfolio commit conflicted; stopping safely."
+                exit 1
+              fi
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+              sleep 3
+            done
+            echo "Unable to publish backup portfolio snapshot"
+            exit 1
+          fi
