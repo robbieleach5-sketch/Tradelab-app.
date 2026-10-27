@@ -9,9 +9,10 @@ on:
       - '.github/workflows/paper-trading.yml'
   schedule:
     # Every ~15 minutes on weekdays, starting from 09:00 UK year-round.
+    # Off-peak minute offsets also re-register the scheduler after missed runs.
     # 08:00 UTC includes 09:00 during British Summer Time; the UK clock guard
     # prevents running earlier than 09:00 in winter. GitHub may delay cron.
-    - cron: '9,24,39,54 8-21 * * 1-5'
+    - cron: '11,26,41,56 8-21 * * 1-5'
 permissions:
   contents: write
 concurrency:
@@ -32,7 +33,7 @@ jobs:
           uk = utc.astimezone(ZoneInfo('Europe/London'))
           ny = utc.astimezone(ZoneInfo('America/New_York'))
           market = ny.weekday() < 5 and time(9, 35) <= ny.time() < time(16, 0)
-          window = uk.weekday() < 5 and uk.time() >= time(9, 0)
+          window = uk.weekday() < 5 and uk.time() >= time(9, 0) and ny.time() < time(16, 0)
           # Manual and code-change runs verify the pipeline, even after hours.
           # The Python engine itself refuses virtual entries outside US hours.
           event = os.environ.get('GITHUB_EVENT_NAME', '')
