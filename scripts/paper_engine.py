@@ -159,10 +159,10 @@ def settle_open_position(state, ticker, completed):
         return True
     return False
 
-def main():
+def main(now=None):
     from datetime import timedelta
     from zoneinfo import ZoneInfo
-    now = datetime.now(timezone.utc)
+    now = now if now is not None else datetime.now(timezone.utc)
     ny = now.astimezone(ZoneInfo("America/New_York"))
     # Avoid trading premarket, weekends and the last 15 minutes of regular session.
     regular = ny.weekday() < 5 and (9, 35) <= (ny.hour, ny.minute) < (16, 0)
@@ -180,6 +180,20 @@ def main():
         print("Twelve Data key not configured; no simulated trades placed")
         return
     state["errors"].pop("DATA_CONFIG", None)
+    # Morning UK heartbeat: the US session is still shut. Publishing a status
+    # snapshot confirms the scheduler is alive without using Twelve Data credits
+    # or inventing US fills/prices before New York opens.
+    if not regular:
+        state["updated_utc"] = now.isoformat()
+        state["run_event"] = os.environ.get("GITHUB_EVENT_NAME", "local")
+        state["run_id"] = os.environ.get("GITHUB_RUN_ID", "")
+        state["market_session_open"] = False
+        state["model"] = ("TradeLab paper simulator on standby while US market is closed. "
+                          "No US quotes fetched and no virtual trades executed.")
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(json.dumps(state, indent=2) + "\n")
+        print("US market closed: TradeLab standing by, no provider requests")
+        return
     # Free tier: 8 credits/minute and 800/day. Check open positions first;
     # rotate 5 additional symbols per 15-minute run to stay under limits.
     universe = list(SYMBOLS)
