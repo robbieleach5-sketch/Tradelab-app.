@@ -331,8 +331,8 @@
     "2026-10-26 XOM opened virtual long",
     "2026-10-26T17:35:00+00:00 NOW closed gap below stop"
   ],
-  "updated_utc": "2026-10-26T20:48:55.142624+00:00",
-  "model": "Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. Proxy fills at observed candle closes; no live broker execution.",
+  "updated_utc": "2026-10-27T08:57:48.502749+00:00",
+  "model": "TradeLab paper simulator on standby while US market is closed. No US quotes fetched and no virtual trades executed.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
     "max_risk_gbp": 10.0,
@@ -354,6 +354,6 @@
     "DE": 1793031900
   },
   "run_event": "push",
-  "run_id": "40398959918",
+  "run_id": "40477200395",
   "market_session_open": false
 }
