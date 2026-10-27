@@ -105,6 +105,60 @@ def intraday_prices(ticker):
         raise ValueError("No valid Twelve Data bars")
     return rows
 
+
+def settle_open_position(state, ticker, completed):
+    """Settle the FIRST stop/target touch across ALL newly observed 5m bars.
+
+    Scheduled scans are around 15 minutes apart, so the latest bar alone
+    cannot reliably tell whether an open position hit its stop in between.
+    This replays completed bars oldest first; it never retroactively opens
+    a new trade based on an intermediate candle.
+    """
+    position = state["positions"].get(ticker)
+    if not position:
+        return False
+
+    previous_timestamp = state["last_processed_intraday"].get(ticker, 0)
+    try:
+        entry_time = datetime.fromisoformat(position["date"])
+        if entry_time.tzinfo is None:
+            entry_time = entry_time.replace(tzinfo=timezone.utc)
+        entry_timestamp = int(entry_time.timestamp())
+    except (ValueError, TypeError, KeyError):
+        entry_timestamp = 0  # Legacy position without a parseable entry time.
+
+    for candle in completed:
+        if candle["timestamp"] <= max(previous_timestamp, entry_timestamp):
+            continue
+        stop_hit = candle["low"] <= position["stop_usd"]
+        target_hit = candle["high"] >= position["target_usd"]
+        if not stop_hit and not target_hit:
+            continue
+
+        # If both touched, assume stop first. Account for adverse open gaps.
+        reason = "stop" if stop_hit else "target"
+        exit_price = position["stop_usd"] if stop_hit else position["target_usd"]
+        if candle["open"] < position["stop_usd"]:
+            exit_price, reason = candle["open"], "gap below stop"
+        elif candle["open"] > position["target_usd"]:
+            exit_price, reason = candle["open"], "gap above target"
+
+        pnl = (exit_price - position["entry_usd"]) * position["qty"] / USD_PER_GBP
+        costs = (exit_price + position["entry_usd"]) * position["qty"] / USD_PER_GBP * 0.001
+        pnl = round(pnl - costs, 2)
+        state["cash_gbp"] = round(state["cash_gbp"] + pnl, 2)
+        exit_time = datetime.fromtimestamp(candle["timestamp"], timezone.utc).isoformat()
+        state["trades"].append({
+            "ticker": ticker, "entry_date": position["date"],
+            "exit_date": exit_time, "entry_usd": position["entry_usd"],
+            "exit_usd": exit_price, "qty": position["qty"],
+            "pnl_gbp": pnl, "reason": reason,
+        })
+        del state["positions"][ticker]
+        state["events"].append(exit_time + " " + ticker + " closed " + reason)
+        return True
+    return False
+
 def main():
     from datetime import timedelta
     from zoneinfo import ZoneInfo
@@ -155,26 +209,7 @@ def main():
                 continue
             position = state["positions"].get(ticker)
             if position:
-                # Existing positions from the daily engine remain open; only process candles
-                # strictly after their entry timestamp when present. Legacy positions are
-                # treated as already open, not newly entered.
-                if bar["low"] <= position["stop_usd"] or bar["high"] >= position["target_usd"]:
-                    # Conservative stop-first assumption if both levels touched in one candle.
-                    reason = "stop" if bar["low"] <= position["stop_usd"] else "target"
-                    exit_price = position["stop_usd"] if reason == "stop" else position["target_usd"]
-                    if bar["open"] < position["stop_usd"]:
-                        exit_price, reason = bar["open"], "gap below stop"
-                    elif bar["open"] > position["target_usd"]:
-                        exit_price, reason = bar["open"], "gap above target"
-                    pnl = (exit_price-position["entry_usd"])*position["qty"]/USD_PER_GBP
-                    costs = (exit_price+position["entry_usd"])*position["qty"]/USD_PER_GBP*0.001
-                    pnl = round(pnl-costs, 2)
-                    state["cash_gbp"] = round(state["cash_gbp"]+pnl, 2)
-                    state["trades"].append({"ticker": ticker, "entry_date": position["date"],
-                        "exit_date": bar_time.isoformat(), "entry_usd": position["entry_usd"],
-                        "exit_usd": exit_price, "qty": position["qty"], "pnl_gbp": pnl, "reason": reason})
-                    del state["positions"][ticker]
-                    state["events"].append(bar_time.isoformat()+" "+ticker+" closed "+reason)
+                settle_open_position(state, ticker, completed)
             elif allow_entry and len(state["positions"]) < 3:
                 # Use completed candles only; buy at latest observed close, not a past open.
                 # This is a proxy fill, not a broker-executable quote.
