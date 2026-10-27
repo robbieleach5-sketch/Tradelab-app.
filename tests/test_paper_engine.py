@@ -1,7 +1,13 @@
 """Regression tests for 15-minute scheduled scans of 5-minute bars."""
+import json
+import os
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 
+from scripts import paper_engine
 from scripts.paper_engine import settle_open_position, USD_PER_GBP
 
 
@@ -79,6 +85,21 @@ class TestOpenPositionReplay(unittest.TestCase):
         self.assertFalse(settle_open_position(state, "TEST", bars))
         self.assertEqual(len(state["trades"]), 1)
 
+
+
+    def test_morning_standby_avoids_market_data_calls(self):
+        """09:09 UK in winter runs a status check, not early US virtual trading."""
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "paper_state.json"
+            with patch.object(paper_engine, "STATE", path), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "test-key"}), \
+                 patch.object(paper_engine, "intraday_prices", side_effect=AssertionError("should not fetch")):
+                paper_engine.main(now=datetime(2026, 10, 27, 9, 9, tzinfo=timezone.utc))
+            result = json.loads(path.read_text())
+            self.assertFalse(result["market_session_open"])
+            self.assertIn("standby", result["model"])
+            self.assertEqual(result["cash_gbp"], 1000)
+            self.assertEqual(result["trades"], [])
 
 if __name__ == "__main__":
     unittest.main()
