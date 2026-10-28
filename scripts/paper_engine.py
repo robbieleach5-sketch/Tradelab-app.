@@ -97,7 +97,8 @@ def intraday_prices(ticker):
             o, h, low, close = (float(item[k]) for k in ("open", "high", "low", "close"))
             if min(o, h, low, close) > 0:
                 rows.append({"timestamp": int(stamp.timestamp()), "open": o,
-                             "high": h, "low": low, "close": close})
+                             "high": h, "low": low, "close": close,
+                             "volume": float(item.get("volume") or 0)})
         except (KeyError, ValueError, TypeError):
             continue
     rows.sort(key=lambda x: x["timestamp"])
@@ -232,7 +233,16 @@ def main(now=None):
                     last20 = sum(b["close"] for b in previous[-20:])/20
                     last50 = sum(b["close"] for b in previous[-50:])/50
                     breakout = bar["close"] > max(b["high"] for b in previous[-20:])
-                    if last20 > last50 and breakout:
+                    # Conservative entry filter: strong established uptrend, confirmed
+                    # breakout, no chasing extended candles, and genuine volume.
+                    # Missing/zero provider volume means NO new trade.
+                    volumes = [b["volume"] for b in previous[-20:] if b.get("volume", 0) > 0]
+                    avg_volume = sum(volumes) / len(volumes) if len(volumes) == 20 else 0
+                    volume_ok = avg_volume > 0 and bar.get("volume", 0) >= 1.5 * avg_volume
+                    trend_ok = last20 > last50 and bar["close"] > last20
+                    breakout_level = max(b["high"] for b in previous[-20:])
+                    not_extended = bar["close"] <= breakout_level * 1.005
+                    if trend_ok and breakout and volume_ok and not_extended:
                         entry = bar["close"]
                         stop, target = entry*(1-STOP_PCT), entry*(1+TARGET_PCT)
                         risk_qty = RISK_GBP*USD_PER_GBP/(entry-stop)
