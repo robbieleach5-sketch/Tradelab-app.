@@ -124,10 +124,15 @@ def selected_watchlist(now, positions):
     universe = FOCUS_SYMBOLS
     slot = int(now.timestamp() // 900)
     start = (slot * CANDIDATES_PER_SCAN) % len(universe)
-    rotating = [universe[(start + k) % len(universe)]
-                for k in range(CANDIDATES_PER_SCAN)]
     opened = list(positions)[:3]
-    return opened + [ticker for ticker in rotating if ticker not in positions][:8-len(opened)]
+    candidates = []
+    for step in range(len(universe)):
+        ticker = universe[(start + step) % len(universe)]
+        if ticker not in positions and ticker not in candidates:
+            candidates.append(ticker)
+        if len(candidates) >= min(CANDIDATES_PER_SCAN, 8 - len(opened)):
+            break
+    return opened + candidates
 
 
 def assess_breakout(completed):
