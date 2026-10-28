@@ -101,5 +101,51 @@ class TestOpenPositionReplay(unittest.TestCase):
             self.assertEqual(result["cash_gbp"], 1000)
             self.assertEqual(result["trades"], [])
 
+class TestFocusedScanner(unittest.TestCase):
+    def test_revisits_all_focused_symbols_within_four_scans(self):
+        symbols = set()
+        for step in range(4):
+            now = BASE + timedelta(minutes=15 * step)
+            symbols.update(paper_engine.selected_watchlist(now, {}))
+        self.assertEqual(symbols, set(paper_engine.FOCUS_SYMBOLS))
+
+    def test_open_virtual_positions_are_always_checked_first(self):
+        positions = {"XOM": {}, "CAT": {}, "ORCL": {}}
+        for step in range(4):
+            chosen = paper_engine.selected_watchlist(BASE + timedelta(minutes=15*step), positions)
+            self.assertEqual(chosen[:3], list(positions))
+            self.assertEqual(len(chosen), 8)
+            self.assertEqual(len(set(chosen)), 8)
+
+    @staticmethod
+    def rising_bars():
+        bars = []
+        for minute in range(50):
+            close = 100 + minute * 0.01
+            bars.append({"close": close, "high": close + 0.03, "volume": 100})
+        bars.append({"close": 100.60, "high": 100.61, "volume": 200})
+        return bars
+
+    def test_only_confirmed_and_not_extended_breakouts_qualify(self):
+        bars = self.rising_bars()
+        self.assertEqual(paper_engine.assess_breakout(bars), (True, "qualified_breakout"))
+        bars[-1]["close"] = 101.5
+        self.assertEqual(paper_engine.assess_breakout(bars),
+                         (False, "breakout_too_extended"))
+
+    def test_missing_volume_or_weak_volume_rejects_entry(self):
+        bars = self.rising_bars()
+        bars[2]["volume"] = 0
+        self.assertEqual(paper_engine.assess_breakout(bars), (False, "missing_volume"))
+        bars = self.rising_bars()
+        bars[-1]["volume"] = 110
+        self.assertEqual(paper_engine.assess_breakout(bars),
+                         (False, "insufficient_breakout_volume"))
+
+    def test_insufficient_history_is_not_traded(self):
+        self.assertEqual(paper_engine.assess_breakout(self.rising_bars()[:35]),
+                         (False, "insufficient_history"))
+
+
 if __name__ == "__main__":
     unittest.main()
