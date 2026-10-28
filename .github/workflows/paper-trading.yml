@@ -7,12 +7,15 @@ on:
   push:
     paths:
       - '.github/workflows/paper-trading.yml'
+      - 'scripts/paper_engine.py'
   schedule:
-    # Every ~15 minutes on weekdays, starting from 09:00 UK year-round.
+    # Fifteen-minute weekday checks: off-peak minutes reduce congestion.
+    # UK time guard in the job enforces the 09:00 start year-round.
+    # GitHub schedule delivery is best-effort and may be delayed or dropped.
     # Off-peak minute offsets also re-register the scheduler after missed runs.
     # 08:00 UTC includes 09:00 during British Summer Time; the UK clock guard
     # prevents running earlier than 09:00 in winter. GitHub may delay cron.
-    - cron: '11,26,41,56 8-21 * * 1-5'
+    - cron: '09,24,39,54 8-21 * * 1-5'
 permissions:
   contents: write
 concurrency:
@@ -84,3 +87,36 @@ jobs:
             echo "Unable to publish portfolio after retries"
             exit 1
           fi
+
+      - name: Verify this run and market data freshness
+        if: steps.window.outputs.run == 'true'
+        env:
+          EXPECTED_RUN_ID: ${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import json, os, sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          state = json.loads(Path('data/paper_state.json').read_text())
+          if str(state.get('run_id')) != os.environ['EXPECTED_RUN_ID']:
+              sys.exit('Scanner health failure: portfolio was not updated by this run')
+          if state.get('errors', {}).get('DATA_CONFIG'):
+              sys.exit('Scanner health failure: missing Twelve Data API key')
+
+          if state.get('market_session_open'):
+              now = datetime.now(timezone.utc)
+              recent = []
+              for ticker, quote in state.get('quotes', {}).items():
+                  try:
+                      quoted = datetime.fromisoformat(quote['date'])
+                      if quoted.tzinfo and 0 <= (now - quoted).total_seconds() <= 45 * 60:
+                          recent.append(ticker)
+                  except (TypeError, ValueError, KeyError):
+                      pass
+              if not recent:
+                  sys.exit('Scanner health failure: no fresh intraday stock prices')
+              print('Market scan verified; recent quotes:', ', '.join(recent))
+          else:
+              print('Standby heartbeat verified: US market closed, no API scan needed')
+          PY
