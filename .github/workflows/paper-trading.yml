@@ -8,12 +8,8 @@ on:
         required: false
         type: string
         default: manual
-  # Also test the paper engine when this workflow file itself changes.
-  # State-file updates do not match this path, avoiding an infinite run loop.
-  push:
-    paths:
-      - '.github/workflows/paper-trading.yml'
-      - 'scripts/paper_engine.py'
+  # Code changes run unit tests separately. Never fetch market prices just
+  # because a developer edited a file: Twelve Data limits credits/minute.
   schedule:
     # Fifteen-minute weekday checks: off-peak minutes reduce congestion.
     # UK time guard in the job enforces the 09:00 start year-round.
