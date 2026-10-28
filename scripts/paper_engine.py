@@ -186,7 +186,7 @@ def main(now=None):
     # or inventing US fills/prices before New York opens.
     if not regular:
         state["updated_utc"] = now.isoformat()
-        state["run_event"] = os.environ.get("GITHUB_EVENT_NAME", "local")
+        state["run_event"] = os.environ.get("TRADELAB_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME", "local")
         state["run_id"] = os.environ.get("GITHUB_RUN_ID", "")
         state["market_session_open"] = False
         state["model"] = ("TradeLab paper simulator on standby while US market is closed. "
@@ -260,7 +260,7 @@ def main(now=None):
         except Exception as exc:
             state["errors"][ticker] = str(exc)[:200]
     state["updated_utc"] = now.isoformat()
-    state["run_event"] = os.environ.get("GITHUB_EVENT_NAME", "local")
+    state["run_event"] = os.environ.get("TRADELAB_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME", "local")
     state["run_id"] = os.environ.get("GITHUB_RUN_ID", "")
     state["market_session_open"] = regular
     state["model"] = ("Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. "
