@@ -56,6 +56,14 @@ SYMBOLS = {
     "QQQ": "qqq.us",
     "IWM": "iwm.us",
 }
+# A focused, diversified paper-trading watchlist is revisited much more
+# often than the previous ~50-name full-universe rotation. These names are
+# hypotheses to test, NOT proven winning stocks or live recommendations.
+FOCUS_SYMBOLS = (
+    "NVDA", "TSLA", "AMD", "META", "MSFT", "AAPL", "AMZN", "AVGO",
+    "PLTR", "MU", "CRWD", "JPM", "XOM", "CAT", "UNH", "COST",
+)
+CANDIDATES_PER_SCAN = 5
 STATE = Path("data/paper_state.json")
 RISK_GBP = 10.0
 START_GBP = 1000.0
@@ -105,6 +113,50 @@ def intraday_prices(ticker):
     if not rows:
         raise ValueError("No valid Twelve Data bars")
     return rows
+
+
+def selected_watchlist(now, positions):
+    """Always protect open trades; rotate five candidates through a focused list.
+
+    This changes discovery only: stop/target settlement and risk limits remain
+    exactly the same for the paper portfolio.
+    """
+    universe = FOCUS_SYMBOLS
+    slot = int(now.timestamp() // 900)
+    start = (slot * CANDIDATES_PER_SCAN) % len(universe)
+    rotating = [universe[(start + k) % len(universe)]
+                for k in range(CANDIDATES_PER_SCAN)]
+    opened = list(positions)[:3]
+    return opened + [ticker for ticker in rotating if ticker not in positions][:8-len(opened)]
+
+
+def assess_breakout(completed):
+    """Identify why a new 5-minute paper entry is rejected.
+
+    Criteria deliberately preserve the previous trend, breakout, volume and
+    0.5% anti-chase rules. Recording reasons is safer than guessing that a
+    looser filter would improve returns without a representative backtest.
+    """
+    previous = completed[:-1]
+    if len(previous) < 50:
+        return False, "insufficient_history"
+    bar = completed[-1]
+    last20 = sum(b["close"] for b in previous[-20:]) / 20
+    last50 = sum(b["close"] for b in previous[-50:]) / 50
+    breakout_level = max(b["high"] for b in previous[-20:])
+    volumes = [b.get("volume", 0) for b in previous[-20:]]
+    if len(volumes) != 20 or any(v <= 0 for v in volumes) or bar.get("volume", 0) <= 0:
+        return False, "missing_volume"
+    if not (last20 > last50 and bar["close"] > last20):
+        return False, "trend_not_confirmed"
+    if bar["close"] <= breakout_level:
+        return False, "no_20bar_breakout"
+    avg_volume = sum(volumes) / 20
+    if bar["volume"] < 1.5 * avg_volume:
+        return False, "insufficient_breakout_volume"
+    if bar["close"] > breakout_level * 1.005:
+        return False, "breakout_too_extended"
+    return True, "qualified_breakout"
 
 
 def settle_open_position(state, ticker, completed):
@@ -195,14 +247,11 @@ def main(now=None):
         STATE.write_text(json.dumps(state, indent=2) + "\n")
         print("US market closed: TradeLab standing by, no provider requests")
         return
-    # Free tier: 8 credits/minute and 800/day. Check open positions first;
-    # rotate 5 additional symbols per 15-minute run to stay under limits.
-    universe = list(SYMBOLS)
-    slot = int(now.timestamp() // 900)
-    start = (slot * 5) % len(universe)
-    rotating = [universe[(start + k) % len(universe)] for k in range(5)]
-    watchlist = list(state["positions"])[:3] + [s for s in rotating if s not in state["positions"]]
-    watchlist = watchlist[:8]
+    # At most 3 open positions + 5 rotating candidates = 8 credits/run.
+    # Test this faster focused rotation before considering broader discovery.
+    watchlist = selected_watchlist(now, state["positions"])
+    report = {"utc": now.isoformat(), "universe_size": len(FOCUS_SYMBOLS),
+              "checked": list(watchlist), "outcomes": {}, "new_paper_entries": []}
     for ticker in watchlist:
         try:
             rows = intraday_prices(ticker)
@@ -217,48 +266,52 @@ def main(now=None):
                                        "source": "Twelve Data 5-minute bars (limited-venue US feed)"}
             # Never trade old candles or repeat a previously processed candle.
             if not regular or ny_bar.date() != ny.date() or (now - bar_time) > timedelta(minutes=25):
+                report["outcomes"][ticker] = "stale_or_outside_session"
                 state["errors"].pop(ticker, None)
                 continue
             if bar["timestamp"] <= state["last_processed_intraday"].get(ticker, 0):
+                report["outcomes"][ticker] = "already_processed"
                 state["errors"].pop(ticker, None)
                 continue
             position = state["positions"].get(ticker)
             if position:
-                settle_open_position(state, ticker, completed)
-            elif allow_entry and len(state["positions"]) < 3:
-                # Use completed candles only; buy at latest observed close, not a past open.
-                # This is a proxy fill, not a broker-executable quote.
-                previous = completed[:-1]
-                if len(previous) >= 50:
-                    last20 = sum(b["close"] for b in previous[-20:])/20
-                    last50 = sum(b["close"] for b in previous[-50:])/50
-                    breakout = bar["close"] > max(b["high"] for b in previous[-20:])
-                    # Conservative entry filter: strong established uptrend, confirmed
-                    # breakout, no chasing extended candles, and genuine volume.
-                    # Missing/zero provider volume means NO new trade.
-                    volumes = [b["volume"] for b in previous[-20:] if b.get("volume", 0) > 0]
-                    avg_volume = sum(volumes) / len(volumes) if len(volumes) == 20 else 0
-                    volume_ok = avg_volume > 0 and bar.get("volume", 0) >= 1.5 * avg_volume
-                    trend_ok = last20 > last50 and bar["close"] > last20
-                    breakout_level = max(b["high"] for b in previous[-20:])
-                    not_extended = bar["close"] <= breakout_level * 1.005
-                    if trend_ok and breakout and volume_ok and not_extended:
-                        entry = bar["close"]
-                        stop, target = entry*(1-STOP_PCT), entry*(1+TARGET_PCT)
-                        risk_qty = RISK_GBP*USD_PER_GBP/(entry-stop)
-                        reserved = sum(p["entry_usd"]*p["qty"]/USD_PER_GBP
-                                       for p in state["positions"].values())
-                        available = max(0, state["cash_gbp"]-reserved)
-                        qty = round(max(0, min(risk_qty, available*USD_PER_GBP/entry)), 5)
-                        if qty > 0:
-                            state["positions"][ticker] = {"date": bar_time.isoformat(),
-                                "entry_usd": entry, "stop_usd": round(stop, 4),
-                                "target_usd": round(target, 4), "qty": qty}
-                            state["events"].append(bar_time.isoformat()+" "+ticker+" opened virtual long (5m)")
+                closed = settle_open_position(state, ticker, completed)
+                report["outcomes"][ticker] = "position_closed" if closed else "position_monitored"
+            elif not allow_entry:
+                report["outcomes"][ticker] = "new_entries_closed"
+            else:
+                eligible, reason = assess_breakout(completed)
+                # Keep existing position count, stop/target distance and £10 risk.
+                if eligible and len(state["positions"]) >= 3:
+                    reason = "portfolio_full"
+                elif eligible:
+                    entry = bar["close"]
+                    stop, target = entry*(1-STOP_PCT), entry*(1+TARGET_PCT)
+                    risk_qty = RISK_GBP*USD_PER_GBP/(entry-stop)
+                    reserved = sum(p["entry_usd"]*p["qty"]/USD_PER_GBP
+                                   for p in state["positions"].values())
+                    available = max(0, state["cash_gbp"]-reserved)
+                    qty = round(max(0, min(risk_qty, available*USD_PER_GBP/entry)), 5)
+                    if qty > 0:
+                        state["positions"][ticker] = {"date": bar_time.isoformat(),
+                            "entry_usd": entry, "stop_usd": round(stop, 4),
+                            "target_usd": round(target, 4), "qty": qty}
+                        state["events"].append(bar_time.isoformat()+" "+ticker+" opened virtual long (5m)")
+                        report["new_paper_entries"].append(ticker)
+                        reason = "paper_entry_opened"
+                    else:
+                        reason = "insufficient_unreserved_cash"
+                report["outcomes"][ticker] = reason
             state["last_processed_intraday"][ticker] = bar["timestamp"]
             state["errors"].pop(ticker, None)
         except Exception as exc:
+            report["outcomes"][ticker] = "provider_error"
             state["errors"][ticker] = str(exc)[:200]
+    state["scan_diagnostics"] = report
+    history = state.get("scan_history", [])
+    if not isinstance(history, list):
+        history = []
+    state["scan_history"] = (history + [report])[-80:]
     state["updated_utc"] = now.isoformat()
     state["run_event"] = os.environ.get("TRADELAB_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME", "local")
     state["run_id"] = os.environ.get("GITHUB_RUN_ID", "")
