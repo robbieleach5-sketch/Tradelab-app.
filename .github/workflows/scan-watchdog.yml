@@ -69,6 +69,14 @@ jobs:
               return max(0, (now - updated).total_seconds())
 
           print('Watchdog active: only scans the simulated portfolio; no broker orders.', flush=True)
+          # One-time smoke test on watchdog code updates: prove the GitHub
+          # Actions token can start the primary workflow without a human.
+          first_ny = datetime.now(timezone.utc).astimezone(ny_tz)
+          if os.environ.get('GITHUB_EVENT_NAME') == 'push' and (
+              first_ny.weekday() < 5 and clock(9, 35) <= first_ny.time() < clock(16, 0)
+          ):
+              dispatch(endpoint, 'watchdog')
+              last_request = time.monotonic()
           while time.monotonic() - started < 270 * 60:
               utc = datetime.now(timezone.utc)
               ny = utc.astimezone(ny_tz)
