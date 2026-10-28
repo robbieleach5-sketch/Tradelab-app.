@@ -1,5 +1,11 @@
 name: Paper engine regression tests
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/paper_engine.py'
+      - 'tests/**'
+      - '.github/workflows/test-paper-engine.yml'
   pull_request:
     paths:
       - 'scripts/paper_engine.py'
