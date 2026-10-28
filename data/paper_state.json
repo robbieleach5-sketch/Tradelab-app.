@@ -339,7 +339,7 @@
     "2026-10-26T17:35:00+00:00 NOW closed gap below stop",
     "2026-10-27T14:55:00+00:00 CAT opened virtual long (5m)"
   ],
-  "updated_utc": "2026-10-28T14:03:08.647064+00:00",
+  "updated_utc": "2026-10-28T14:04:06.801754+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -375,7 +375,7 @@
     "MSFT": 1793195700,
     "AMZN": 1793195700
   },
-  "run_event": "push",
-  "run_id": "40702127806",
+  "run_event": "watchdog",
+  "run_id": "40702286857",
   "market_session_open": true
 }
