@@ -81,7 +81,6 @@
     "IWM": "2026-10-26"
   },
   "errors": {
-    "CAT": "HTTP Error 429: Too Many Requests",
     "MSFT": "HTTP Error 429: Too Many Requests",
     "AAPL": "HTTP Error 429: Too Many Requests",
     "AMZN": "HTTP Error 429: Too Many Requests",
@@ -145,8 +144,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CRWD": {
-      "date": "2026-10-28T16:55:00+00:00",
-      "close_usd": 265.235,
+      "date": "2026-10-28T17:15:00+00:00",
+      "close_usd": 264.71,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "NET": {
@@ -175,8 +174,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "MU": {
-      "date": "2026-10-28T14:50:00+00:00",
-      "close_usd": 967.07,
+      "date": "2026-10-28T17:15:00+00:00",
+      "close_usd": 964.38,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "QCOM": {
@@ -240,8 +239,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "JPM": {
-      "date": "2026-10-28T15:25:00+00:00",
-      "close_usd": 338.36,
+      "date": "2026-10-28T17:15:00+00:00",
+      "close_usd": 339.66,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "BAC": {
@@ -275,8 +274,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "UNH": {
-      "date": "2026-10-28T15:45:00+00:00",
-      "close_usd": 413.2,
+      "date": "2026-10-28T17:15:00+00:00",
+      "close_usd": 410.32,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "JNJ": {
@@ -295,8 +294,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "XOM": {
-      "date": "2026-10-28T17:00:00+00:00",
-      "close_usd": 183.245,
+      "date": "2026-10-28T17:15:00+00:00",
+      "close_usd": 183.1,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CVX": {
@@ -305,8 +304,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CAT": {
-      "date": "2026-10-28T17:00:00+00:00",
-      "close_usd": 716.48,
+      "date": "2026-10-28T17:15:00+00:00",
+      "close_usd": 715.64,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "DE": {
@@ -320,8 +319,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "COST": {
-      "date": "2026-10-28T16:20:00+00:00",
-      "close_usd": 984.245,
+      "date": "2026-10-28T17:15:00+00:00",
+      "close_usd": 983.95,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "SPY": {
@@ -346,7 +345,7 @@
     "2026-10-26T17:35:00+00:00 NOW closed gap below stop",
     "2026-10-27T14:55:00+00:00 CAT opened virtual long (5m)"
   ],
-  "updated_utc": "2026-10-28T17:06:31.971818+00:00",
+  "updated_utc": "2026-10-28T17:24:36.512795+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -357,22 +356,22 @@
   },
   "last_processed_intraday": {
     "NOW": 1793127600,
-    "XOM": 1793206800,
+    "XOM": 1793207700,
     "PLTR": 1793206800,
-    "CRWD": 1793206500,
+    "CRWD": 1793207700,
     "NET": 1793206500,
     "ORCL": 1793206500,
     "CRM": 1793206500,
     "ABBV": 1793203500,
     "CVX": 1793203500,
-    "CAT": 1793206800,
+    "CAT": 1793207700,
     "DE": 1793203500,
     "AMAT": 1793127600,
     "LRCX": 1793127600,
     "KLAC": 1793127600,
     "PANW": 1793127600,
     "WMT": 1793204400,
-    "COST": 1793204400,
+    "COST": 1793207700,
     "SPY": 1793204400,
     "QQQ": 1793204400,
     "IWM": 1793204400,
@@ -388,47 +387,47 @@
     "NFLX": 1793205600,
     "ADBE": 1793199000,
     "INTC": 1793199000,
-    "MU": 1793199000,
+    "MU": 1793207700,
     "QCOM": 1793199000,
     "TXN": 1793199000,
     "UBER": 1793200200,
     "SHOP": 1793200200,
     "COIN": 1793200200,
     "PYPL": 1793200200,
-    "JPM": 1793201100,
+    "JPM": 1793207700,
     "BAC": 1793201100,
     "GS": 1793201100,
     "MS": 1793201100,
     "V": 1793201100,
     "MA": 1793202300,
     "BRK.B": 1793202300,
-    "UNH": 1793202300,
+    "UNH": 1793207700,
     "JNJ": 1793202300,
     "LLY": 1793202300
   },
-  "run_event": "push",
-  "run_id": "40732478273",
+  "run_event": "watchdog",
+  "run_id": "40735415960",
   "market_session_open": true,
   "scan_diagnostics": {
-    "utc": "2026-10-28T17:06:31.971818+00:00",
+    "utc": "2026-10-28T17:24:36.512795+00:00",
     "universe_size": 16,
     "checked": [
       "XOM",
       "CAT",
-      "MSFT",
-      "AAPL",
-      "AMZN",
-      "AVGO",
-      "PLTR"
+      "MU",
+      "CRWD",
+      "JPM",
+      "UNH",
+      "COST"
     ],
     "outcomes": {
-      "XOM": "already_processed",
-      "CAT": "provider_error",
-      "MSFT": "provider_error",
-      "AAPL": "provider_error",
-      "AMZN": "provider_error",
-      "AVGO": "provider_error",
-      "PLTR": "provider_error"
+      "XOM": "position_monitored",
+      "CAT": "position_monitored",
+      "MU": "trend_not_confirmed",
+      "CRWD": "trend_not_confirmed",
+      "JPM": "trend_not_confirmed",
+      "UNH": "trend_not_confirmed",
+      "COST": "trend_not_confirmed"
     },
     "new_paper_entries": []
   },
@@ -476,6 +475,29 @@
         "AMZN": "provider_error",
         "AVGO": "provider_error",
         "PLTR": "provider_error"
+      },
+      "new_paper_entries": []
+    },
+    {
+      "utc": "2026-10-28T17:24:36.512795+00:00",
+      "universe_size": 16,
+      "checked": [
+        "XOM",
+        "CAT",
+        "MU",
+        "CRWD",
+        "JPM",
+        "UNH",
+        "COST"
+      ],
+      "outcomes": {
+        "XOM": "position_monitored",
+        "CAT": "position_monitored",
+        "MU": "trend_not_confirmed",
+        "CRWD": "trend_not_confirmed",
+        "JPM": "trend_not_confirmed",
+        "UNH": "trend_not_confirmed",
+        "COST": "trend_not_confirmed"
       },
       "new_paper_entries": []
     }
