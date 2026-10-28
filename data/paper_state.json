@@ -258,29 +258,29 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "MA": {
-      "date": "2026-10-26",
-      "close_usd": 618.9959716796875,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-28T15:45:00+00:00",
+      "close_usd": 615.83,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "BRK.B": {
-      "date": "2026-10-26",
-      "close_usd": 544.97998046875,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-28T15:45:00+00:00",
+      "close_usd": 544.56,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "UNH": {
-      "date": "2026-10-26",
-      "close_usd": 419.385009765625,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-28T15:45:00+00:00",
+      "close_usd": 413.2,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "JNJ": {
-      "date": "2026-10-26",
-      "close_usd": 271.6000061035156,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-28T15:45:00+00:00",
+      "close_usd": 271.81,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "LLY": {
-      "date": "2026-10-26",
-      "close_usd": 1286.3800048828125,
-      "source": "Stooq daily historical CSV"
+      "date": "2026-10-28T15:45:00+00:00",
+      "close_usd": 1293.88,
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "ABBV": {
       "date": "2026-10-27T14:55:00+00:00",
@@ -288,8 +288,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "XOM": {
-      "date": "2026-10-28T15:25:00+00:00",
-      "close_usd": 182.705,
+      "date": "2026-10-28T15:45:00+00:00",
+      "close_usd": 183.29,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CVX": {
@@ -298,8 +298,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CAT": {
-      "date": "2026-10-28T15:25:00+00:00",
-      "close_usd": 712.73,
+      "date": "2026-10-28T15:45:00+00:00",
+      "close_usd": 714.83,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "DE": {
@@ -339,7 +339,7 @@
     "2026-10-26T17:35:00+00:00 NOW closed gap below stop",
     "2026-10-27T14:55:00+00:00 CAT opened virtual long (5m)"
   ],
-  "updated_utc": "2026-10-28T15:34:48.220631+00:00",
+  "updated_utc": "2026-10-28T15:52:55.319272+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -350,7 +350,7 @@
   },
   "last_processed_intraday": {
     "NOW": 1793127600,
-    "XOM": 1793201100,
+    "XOM": 1793202300,
     "PLTR": 1793197800,
     "CRWD": 1793197800,
     "NET": 1793197800,
@@ -358,7 +358,7 @@
     "CRM": 1793197800,
     "ABBV": 1793112900,
     "CVX": 1793112900,
-    "CAT": 1793201100,
+    "CAT": 1793202300,
     "DE": 1793112900,
     "AMAT": 1793127600,
     "LRCX": 1793127600,
@@ -392,9 +392,14 @@
     "BAC": 1793201100,
     "GS": 1793201100,
     "MS": 1793201100,
-    "V": 1793201100
+    "V": 1793201100,
+    "MA": 1793202300,
+    "BRK.B": 1793202300,
+    "UNH": 1793202300,
+    "JNJ": 1793202300,
+    "LLY": 1793202300
   },
   "run_event": "watchdog",
-  "run_id": "40717364118",
+  "run_id": "40720403325",
   "market_session_open": true
 }
