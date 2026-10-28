@@ -62,18 +62,40 @@ jobs:
         run: |
           git fetch origin main
           git checkout -B main origin/main
-      - uses: actions/setup-python@v5
+      - name: Prevent duplicate API scans during the provider cooldown
+        id: throttle
         if: steps.window.outputs.run == 'true'
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          from datetime import datetime, timezone, timedelta
+          try:
+              data = json.loads(Path('data/paper_state.json').read_text())
+              updated = datetime.fromisoformat(data['updated_utc'])
+              if updated.tzinfo is None:
+                  updated = updated.replace(tzinfo=timezone.utc)
+              age = datetime.now(timezone.utc) - updated.astimezone(timezone.utc)
+          except (ValueError, OSError, KeyError, TypeError):
+              age = timedelta(days=1)
+          # Two 7-8 credit requests within a minute can exceed free limits.
+          # Never claim an extra scan happened if this job skipped fetching.
+          scan = age >= timedelta(minutes=3)
+          print(f'run={str(scan).lower()}')
+          print(f'last_snapshot_age_minutes={age.total_seconds()/60:.1f}')
+          PY
+      - uses: actions/setup-python@v5
+        if: steps.window.outputs.run == 'true' && steps.throttle.outputs.run == 'true'
         with:
           python-version: '3.12'
       - name: Update virtual trades from Twelve Data
-        if: steps.window.outputs.run == 'true'
+        if: steps.window.outputs.run == 'true' && steps.throttle.outputs.run == 'true'
         env:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
           TRADELAB_TRIGGER: ${{ inputs.origin }}
         run: python scripts/paper_engine.py
       - name: Save simulated portfolio snapshot
-        if: steps.window.outputs.run == 'true'
+        if: steps.window.outputs.run == 'true' && steps.throttle.outputs.run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -100,7 +122,7 @@ jobs:
           fi
 
       - name: Verify this run and market data freshness
-        if: steps.window.outputs.run == 'true'
+        if: steps.window.outputs.run == 'true' && steps.throttle.outputs.run == 'true'
         env:
           EXPECTED_RUN_ID: ${{ github.run_id }}
         run: |
