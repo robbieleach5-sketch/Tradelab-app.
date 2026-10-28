@@ -135,7 +135,7 @@ class TestFocusedScanner(unittest.TestCase):
 
     def test_missing_volume_or_weak_volume_rejects_entry(self):
         bars = self.rising_bars()
-        bars[2]["volume"] = 0
+        bars[-2]["volume"] = 0
         self.assertEqual(paper_engine.assess_breakout(bars), (False, "missing_volume"))
         bars = self.rising_bars()
         bars[-1]["volume"] = 110
