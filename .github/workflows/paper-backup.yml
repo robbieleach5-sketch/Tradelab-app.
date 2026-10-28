@@ -21,6 +21,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: true
+      - name: Sync latest published paper portfolio
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
       - name: Check whether paper scanner is overdue
         id: stale
         run: |
