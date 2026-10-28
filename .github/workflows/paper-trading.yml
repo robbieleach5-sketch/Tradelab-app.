@@ -58,6 +58,14 @@ jobs:
         if: steps.window.outputs.run == 'true'
         with:
           persist-credentials: true
+      # Workflow events can queue on an older commit. Re-read the authoritative
+      # portfolio before simulating any fills so competing triggers cannot
+      # replay older positions or overwrite newer trades.
+      - name: Sync latest paper portfolio from main
+        if: steps.window.outputs.run == 'true'
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
       - uses: actions/setup-python@v5
         if: steps.window.outputs.run == 'true'
         with:
