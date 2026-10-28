@@ -283,28 +283,28 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "ABBV": {
-      "date": "2026-10-27T14:55:00+00:00",
-      "close_usd": 286.68,
+      "date": "2026-10-28T16:05:00+00:00",
+      "close_usd": 287.33,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "XOM": {
-      "date": "2026-10-28T15:45:00+00:00",
-      "close_usd": 183.29,
+      "date": "2026-10-28T16:05:00+00:00",
+      "close_usd": 183.47,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CVX": {
-      "date": "2026-10-27T14:55:00+00:00",
-      "close_usd": 228.61,
+      "date": "2026-10-28T16:05:00+00:00",
+      "close_usd": 231.385,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CAT": {
-      "date": "2026-10-28T15:45:00+00:00",
-      "close_usd": 714.83,
+      "date": "2026-10-28T16:05:00+00:00",
+      "close_usd": 715.31,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "DE": {
-      "date": "2026-10-27T14:55:00+00:00",
-      "close_usd": 648.11,
+      "date": "2026-10-28T16:05:00+00:00",
+      "close_usd": 641.88,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "WMT": {
@@ -339,7 +339,7 @@
     "2026-10-26T17:35:00+00:00 NOW closed gap below stop",
     "2026-10-27T14:55:00+00:00 CAT opened virtual long (5m)"
   ],
-  "updated_utc": "2026-10-28T15:52:55.319272+00:00",
+  "updated_utc": "2026-10-28T16:11:03.438928+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -350,16 +350,16 @@
   },
   "last_processed_intraday": {
     "NOW": 1793127600,
-    "XOM": 1793202300,
+    "XOM": 1793203500,
     "PLTR": 1793197800,
     "CRWD": 1793197800,
     "NET": 1793197800,
     "ORCL": 1793197800,
     "CRM": 1793197800,
-    "ABBV": 1793112900,
-    "CVX": 1793112900,
-    "CAT": 1793202300,
-    "DE": 1793112900,
+    "ABBV": 1793203500,
+    "CVX": 1793203500,
+    "CAT": 1793203500,
+    "DE": 1793203500,
     "AMAT": 1793127600,
     "LRCX": 1793127600,
     "KLAC": 1793127600,
@@ -400,6 +400,6 @@
     "LLY": 1793202300
   },
   "run_event": "watchdog",
-  "run_id": "40720403325",
+  "run_id": "40723412096",
   "market_session_open": true
 }
