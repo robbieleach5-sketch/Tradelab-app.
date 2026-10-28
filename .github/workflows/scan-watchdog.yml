@@ -1,0 +1,111 @@
+name: TradeLab market session watchdog
+run-name: TradeLab auto-keepalive (${{ github.event_name }})
+on:
+  workflow_dispatch:
+  # The first commit starts an immediate, testable watchdog session.
+  push:
+    paths:
+      - '.github/workflows/scan-watchdog.yml'
+  schedule:
+    # Start opportunities, UTC: independent of the main scan/backup cron.
+    # A running watchdog can trigger new scans, so skipped cron ticks no
+    # longer prevent progress for the remainder of that market session.
+    - cron: '7,37 13,14,16,18,19 * * 1-5'
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: tradelab-session-watchdog
+  cancel-in-progress: true
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Watch scanner freshness and dispatch overdue paper scans
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import subprocess
+          import sys
+          import time
+          from datetime import datetime, time as clock, timezone
+          from zoneinfo import ZoneInfo
+
+          repo = os.environ['REPO']
+          endpoint = f'repos/{repo}/actions/workflows/paper-trading.yml/dispatches'
+          snapshot_path = f'repos/{repo}/contents/data/paper_state.json'
+          ny_tz = ZoneInfo('America/New_York')
+          uk_tz = ZoneInfo('Europe/London')
+          started = time.monotonic()
+          last_request = started - 1200
+          last_report = started - 1200
+
+          def github(*args):
+              result = subprocess.run(['gh', 'api', *args],
+                                      capture_output=True, text=True, timeout=35)
+              if result.returncode:
+                  raise RuntimeError((result.stderr or result.stdout).strip()[:400])
+              return result.stdout
+
+          def dispatch(path):
+              github('-X', 'POST', path, '-f', 'ref=main',
+                     '-f', 'inputs[origin]=watchdog')
+              print('Triggered ' + path, flush=True)
+
+          def fresh_age(now):
+              raw = github(snapshot_path, '--jq', '.content').strip()
+              payload = json.loads(base64.b64decode(raw))
+              updated = datetime.fromisoformat(payload['updated_utc'])
+              if updated.tzinfo is None:
+                  updated = updated.replace(tzinfo=timezone.utc)
+              return max(0, (now - updated).total_seconds())
+
+          print('Watchdog active: only scans the simulated portfolio; no broker orders.', flush=True)
+          while time.monotonic() - started < 270 * 60:
+              utc = datetime.now(timezone.utc)
+              ny = utc.astimezone(ny_tz)
+              uk = utc.astimezone(uk_tz)
+              if ny.weekday() >= 5 or uk.weekday() >= 5 or ny.time() >= clock(16, 0):
+                  print('US regular market session is over; stopping watchdog.', flush=True)
+                  sys.exit(0)
+              if uk.time() < clock(9, 0) or ny.time() < clock(9, 35):
+                  time.sleep(60)
+                  continue
+              try:
+                  age = fresh_age(utc)
+              except Exception as exc:
+                  print('Snapshot read error: ' + str(exc), flush=True)
+                  age = 24 * 3600  # Safe to try dispatching when snapshot is unavailable.
+              elapsed = time.monotonic()
+              # Allow time for the existing workflow to start, fetch prices and publish.
+              # Avoid duplicate API requests when ordinary scheduled scans work.
+              if age > 17 * 60 and elapsed - last_request >= 7 * 60:
+                  try:
+                      dispatch(endpoint)
+                      last_request = elapsed
+                  except Exception as exc:
+                      print('Could not dispatch primary: ' + str(exc), flush=True)
+                      last_request = elapsed  # Back off instead of flooding GitHub.
+              elif elapsed - last_report >= 15 * 60:
+                  print('Snapshot age: ' + str(round(age / 60, 1)) +
+                        ' minutes; continuing watch.', flush=True)
+                  last_report = elapsed
+              time.sleep(60)
+
+          # A new short-lived watchdog can take over without relying on a
+          # scheduled event. GITHUB_TOKEN workflow_dispatch is supported.
+          ny = datetime.now(timezone.utc).astimezone(ny_tz)
+          if ny.weekday() < 5 and clock(9, 35) <= ny.time() < clock(16, 0):
+              try:
+                  dispatch(f'repos/{repo}/actions/workflows/scan-watchdog.yml/dispatches')
+                  print('Handed watch to next bounded session.', flush=True)
+              except Exception as exc:
+                  print('Watchdog handoff failed: ' + str(exc), flush=True)
+                  sys.exit(1)
+          PY
