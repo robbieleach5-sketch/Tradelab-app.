@@ -53,9 +53,11 @@ jobs:
                   raise RuntimeError((result.stderr or result.stdout).strip()[:400])
               return result.stdout
 
-          def dispatch(path):
-              github('-X', 'POST', path, '-f', 'ref=main',
-                     '-f', 'inputs[origin]=watchdog')
+          def dispatch(path, origin=None):
+              args = ['-X', 'POST', path, '-f', 'ref=main']
+              if origin:
+                  args += ['-f', 'inputs[origin]=' + origin]
+              github(*args)
               print('Triggered ' + path, flush=True)
 
           def fresh_age(now):
@@ -87,7 +89,7 @@ jobs:
               # Avoid duplicate API requests when ordinary scheduled scans work.
               if age > 17 * 60 and elapsed - last_request >= 7 * 60:
                   try:
-                      dispatch(endpoint)
+                      dispatch(endpoint, 'watchdog')
                       last_request = elapsed
                   except Exception as exc:
                       print('Could not dispatch primary: ' + str(exc), flush=True)
