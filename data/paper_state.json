@@ -81,9 +81,6 @@
     "IWM": "2026-10-26"
   },
   "errors": {
-    "MSFT": "HTTP Error 429: Too Many Requests",
-    "AAPL": "HTTP Error 429: Too Many Requests",
-    "AMZN": "HTTP Error 429: Too Many Requests",
     "AVGO": "HTTP Error 429: Too Many Requests"
   },
   "quotes": {
@@ -98,17 +95,17 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "AAPL": {
-      "date": "2026-10-28T17:00:00+00:00",
-      "close_usd": 345.65,
+      "date": "2026-10-28T18:30:00+00:00",
+      "close_usd": 344.68,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "MSFT": {
-      "date": "2026-10-28T17:00:00+00:00",
-      "close_usd": 527.53,
+      "date": "2026-10-28T18:30:00+00:00",
+      "close_usd": 528.66,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "AMZN": {
-      "date": "2026-10-28T17:00:00+00:00",
+      "date": "2026-10-28T18:30:00+00:00",
       "close_usd": 253.21,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
@@ -118,8 +115,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "META": {
-      "date": "2026-10-28T16:40:00+00:00",
-      "close_usd": 613.695,
+      "date": "2026-10-28T18:30:00+00:00",
+      "close_usd": 610.92,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "AVGO": {
@@ -128,8 +125,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "AMD": {
-      "date": "2026-10-28T18:10:00+00:00",
-      "close_usd": 569.285,
+      "date": "2026-10-28T18:30:00+00:00",
+      "close_usd": 573.35,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "NFLX": {
@@ -293,8 +290,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "XOM": {
-      "date": "2026-10-28T18:10:00+00:00",
-      "close_usd": 182.82,
+      "date": "2026-10-28T18:30:00+00:00",
+      "close_usd": 182.39,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CVX": {
@@ -303,8 +300,8 @@
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "CAT": {
-      "date": "2026-10-28T18:10:00+00:00",
-      "close_usd": 714.98,
+      "date": "2026-10-28T18:30:00+00:00",
+      "close_usd": 717.72,
       "source": "Twelve Data 5-minute bars (limited-venue US feed)"
     },
     "DE": {
@@ -344,7 +341,7 @@
     "2026-10-26T17:35:00+00:00 NOW closed gap below stop",
     "2026-10-27T14:55:00+00:00 CAT opened virtual long (5m)"
   ],
-  "updated_utc": "2026-10-28T18:18:57.841585+00:00",
+  "updated_utc": "2026-10-28T18:36:14.019610+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -355,7 +352,7 @@
   },
   "last_processed_intraday": {
     "NOW": 1793127600,
-    "XOM": 1793211000,
+    "XOM": 1793212200,
     "PLTR": 1793210100,
     "CRWD": 1793210100,
     "NET": 1793206500,
@@ -363,7 +360,7 @@
     "CRM": 1793206500,
     "ABBV": 1793203500,
     "CVX": 1793203500,
-    "CAT": 1793211000,
+    "CAT": 1793212200,
     "DE": 1793203500,
     "AMAT": 1793127600,
     "LRCX": 1793127600,
@@ -376,13 +373,13 @@
     "IWM": 1793204400,
     "TSLA": 1793211000,
     "NVDA": 1793211000,
-    "AAPL": 1793206800,
-    "MSFT": 1793206800,
-    "AMZN": 1793206800,
+    "AAPL": 1793212200,
+    "MSFT": 1793212200,
+    "AMZN": 1793212200,
     "GOOGL": 1793205600,
-    "META": 1793205600,
+    "META": 1793212200,
     "AVGO": 1793206800,
-    "AMD": 1793211000,
+    "AMD": 1793212200,
     "NFLX": 1793205600,
     "ADBE": 1793199000,
     "INTC": 1793199000,
@@ -405,28 +402,28 @@
     "LLY": 1793202300
   },
   "run_event": "watchdog",
-  "run_id": "40743932468",
+  "run_id": "40746641995",
   "market_session_open": true,
   "scan_diagnostics": {
-    "utc": "2026-10-28T18:18:57.841585+00:00",
+    "utc": "2026-10-28T18:36:14.019610+00:00",
     "universe_size": 16,
     "checked": [
       "XOM",
       "CAT",
-      "UNH",
-      "COST",
-      "NVDA",
-      "TSLA",
-      "AMD"
+      "AMD",
+      "META",
+      "MSFT",
+      "AAPL",
+      "AMZN"
     ],
     "outcomes": {
       "XOM": "position_monitored",
       "CAT": "position_monitored",
-      "UNH": "trend_not_confirmed",
-      "COST": "no_20bar_breakout",
-      "NVDA": "trend_not_confirmed",
-      "TSLA": "no_20bar_breakout",
-      "AMD": "no_20bar_breakout"
+      "AMD": "insufficient_unreserved_cash",
+      "META": "trend_not_confirmed",
+      "MSFT": "trend_not_confirmed",
+      "AAPL": "trend_not_confirmed",
+      "AMZN": "no_20bar_breakout"
     },
     "new_paper_entries": []
   },
@@ -566,6 +563,29 @@
         "NVDA": "trend_not_confirmed",
         "TSLA": "no_20bar_breakout",
         "AMD": "no_20bar_breakout"
+      },
+      "new_paper_entries": []
+    },
+    {
+      "utc": "2026-10-28T18:36:14.019610+00:00",
+      "universe_size": 16,
+      "checked": [
+        "XOM",
+        "CAT",
+        "AMD",
+        "META",
+        "MSFT",
+        "AAPL",
+        "AMZN"
+      ],
+      "outcomes": {
+        "XOM": "position_monitored",
+        "CAT": "position_monitored",
+        "AMD": "insufficient_unreserved_cash",
+        "META": "trend_not_confirmed",
+        "MSFT": "trend_not_confirmed",
+        "AAPL": "trend_not_confirmed",
+        "AMZN": "no_20bar_breakout"
       },
       "new_paper_entries": []
     }
