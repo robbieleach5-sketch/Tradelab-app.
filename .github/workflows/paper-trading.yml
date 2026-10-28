@@ -1,7 +1,13 @@
 name: Twelve Data virtual trading
-run-name: TradeLab scan (${{ github.event_name }})
+run-name: TradeLab scan (${{ inputs.origin || github.event_name }})
 on:
   workflow_dispatch:
+    inputs:
+      origin:
+        description: Automatic watchdog or manual request
+        required: false
+        type: string
+        default: manual
   # Also test the paper engine when this workflow file itself changes.
   # State-file updates do not match this path, avoiding an infinite run loop.
   push:
@@ -15,7 +21,7 @@ on:
     # Off-peak minute offsets also re-register the scheduler after missed runs.
     # 08:00 UTC includes 09:00 during British Summer Time; the UK clock guard
     # prevents running earlier than 09:00 in winter. GitHub may delay cron.
-    - cron: '09,24,39,54 8-21 * * 1-5'
+    - cron: '9,24,39,54 8-21 * * 1-5'
 permissions:
   contents: write
 concurrency:
@@ -60,6 +66,7 @@ jobs:
         if: steps.window.outputs.run == 'true'
         env:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          TRADELAB_TRIGGER: ${{ inputs.origin }}
         run: python scripts/paper_engine.py
       - name: Save simulated portfolio snapshot
         if: steps.window.outputs.run == 'true'
