@@ -1,0 +1,15 @@
+{
+  "mode": "paper_only",
+  "status": "experimental_not_live",
+  "initial_virtual_equity_gbp": 1000,
+  "position_notional_cap_gbp": 150,
+  "stop_pct": 2.5,
+  "target_pct": 6,
+  "max_open_positions": 4,
+  "daily_realized_loss_limit_gbp": 30,
+  "max_total_open_risk_gbp": 15,
+  "require_fresh_quotes_minutes": 15,
+  "block_new_entries_on_provider_error": true,
+  "require_successful_data_checks": true,
+  "notes": "Do not deploy until provider 429 errors are resolved, automated tests pass, and comparative forward testing validates strategy. Existing positions retain original stops and targets. Never send broker orders."
+}
