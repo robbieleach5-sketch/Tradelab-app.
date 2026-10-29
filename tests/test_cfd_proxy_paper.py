@@ -13,7 +13,7 @@ def bar(at, price, high=None, low=None, vol=100):
 
 
 def history(now=NOW, descending=False):
-    start = now - timedelta(minutes=60*5)
+    start = now - timedelta(minutes=60*5+5)
     out = []
     for i in range(59):
         p = (105 - i*0.04) if descending else (100 + i*0.04)
