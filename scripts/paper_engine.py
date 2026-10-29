@@ -63,6 +63,10 @@ FOCUS_SYMBOLS = (
     "NVDA", "TSLA", "AMD", "META", "MSFT", "AAPL", "AMZN", "AVGO",
     "PLTR", "MU", "CRWD", "JPM", "XOM", "CAT", "UNH", "COST",
 )
+# UK large-caps are monitored only when a licensed intraday London feed
+# is explicitly enabled. Twelve Data Basic does NOT offer live UK coverage.
+UK_FOCUS_SYMBOLS = ("SHEL", "AZN", "HSBA", "ULVR", "BARC", "LLOY", "VOD", "BP.")
+UK_CANDIDATES_PER_SCAN = 5
 CANDIDATES_PER_SCAN = 5
 MAX_API_SYMBOLS_PER_SCAN = 8
 MAX_OPEN_POSITIONS = 4
@@ -87,27 +91,49 @@ def load_state():
             pass
     return {"cash_gbp": START_GBP, "positions": {}, "trades": [], "last_processed": {}}
 
-def intraday_prices(ticker):
-    """Twelve Data 5-minute US stock bars. No fallback to Yahoo or Alpaca."""
+def intraday_prices(ticker, market="US"):
+    """Five-minute bars for US shares, or licensed LSE intraday UK shares.
+
+    UK prices are normalized to GBP per share. UK prices in GBX are pence,
+    which must be divided by 100; never treat GBX figures as pounds.
+    Missing permissions, wrong venue, stale dates or missing volumes cannot
+    open a virtual trade.
+    """
     from zoneinfo import ZoneInfo
     key = os.environ.get("TWELVE_DATA_API_KEY")
     if not key:
         raise RuntimeError("Missing GitHub Actions secret TWELVE_DATA_API_KEY")
-    params = urllib.parse.urlencode({"symbol": ticker, "interval": "5min",
-                                      "outputsize": 90, "timezone": "America/New_York"})
-    req = urllib.request.Request("https://api.twelvedata.com/time_series?" + params,
-                                 headers={"Authorization": "apikey " + key,
-                                          "Accept": "application/json"})
+    if market not in ("US", "UK"):
+        raise ValueError("Unsupported exchange")
+    tz_name = "Europe/London" if market == "UK" else "America/New_York"
+    params = {"symbol": ticker, "interval": "5min",
+              "outputsize": 90, "timezone": tz_name}
+    if market == "UK":
+        params["exchange"] = "LSE"
+    req = urllib.request.Request(
+        "https://api.twelvedata.com/time_series?" + urllib.parse.urlencode(params),
+        headers={"Authorization": "apikey " + key, "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=15) as response:
         payload = json.load(response)
     if payload.get("status") == "error" or "values" not in payload:
         raise ValueError("Twelve Data: " + str(payload.get("message", "No bars returned"))[:130])
+    multiplier = 1.0
+    if market == "UK":
+        meta = payload.get("meta") or {}
+        venue = str(meta.get("exchange") or "").lower()
+        if str(meta.get("mic_code") or "").upper() != "XLON" and "london" not in venue and venue != "lse":
+            raise ValueError("UK data rejected: provider did not confirm London Stock Exchange")
+        currency = str(meta.get("currency") or "").upper()
+        if currency in ("GBX", "GBPENCE"):
+            multiplier = 0.01
+        elif currency != "GBP":
+            raise ValueError("UK data rejected: unsupported or missing price currency")
     rows = []
-    tz = ZoneInfo("America/New_York")
+    tz = ZoneInfo(tz_name)
     for item in payload["values"]:
         try:
             stamp = datetime.strptime(item["datetime"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
-            o, h, low, close = (float(item[k]) for k in ("open", "high", "low", "close"))
+            o, h, low, close = (float(item[k]) * multiplier for k in ("open", "high", "low", "close"))
             if min(o, h, low, close) > 0:
                 rows.append({"timestamp": int(stamp.timestamp()), "open": o,
                              "high": h, "low": low, "close": close,
@@ -118,6 +144,47 @@ def intraday_prices(ticker):
     if not rows:
         raise ValueError("No valid Twelve Data bars")
     return rows
+
+
+def selected_uk_candidates(now, positions):
+    """Rotate a small LSE watchlist without ever requesting duplicate tickers."""
+    slot = int(now.timestamp() // 900)
+    start = (slot * UK_CANDIDATES_PER_SCAN) % len(UK_FOCUS_SYMBOLS)
+    return [
+        UK_FOCUS_SYMBOLS[(start + step) % len(UK_FOCUS_SYMBOLS)]
+        for step in range(len(UK_FOCUS_SYMBOLS))
+        if UK_FOCUS_SYMBOLS[(start + step) % len(UK_FOCUS_SYMBOLS)] not in positions
+    ][:UK_CANDIDATES_PER_SCAN]
+
+
+def select_active_watchlist(now, positions, us_active, uk_active):
+    """Monitor every active open position first; 8 API credits max in total."""
+    opened = [
+        ticker for ticker, pos in positions.items()
+        if (pos.get("currency", "USD") == "GBP" and uk_active)
+        or (pos.get("currency", "USD") != "GBP" and us_active)
+    ]
+    if len(opened) >= MAX_API_SYMBOLS_PER_SCAN:
+        return opened[:MAX_API_SYMBOLS_PER_SCAN]
+    remaining = MAX_API_SYMBOLS_PER_SCAN - len(opened)
+    us_open = {k: v for k, v in positions.items() if v.get("currency", "USD") != "GBP"}
+    us_candidates = [
+        ticker for ticker in selected_watchlist(now, us_open)
+        if ticker not in positions
+    ] if us_active else []
+    uk_candidates = selected_uk_candidates(now, positions) if uk_active else []
+    if us_active and uk_active:
+        # Share discovery across both exchanges; prioritize existing US coverage
+        # if one venue has no remaining candidates.
+        chosen = uk_candidates[:min(2, remaining)]
+        chosen += us_candidates[:max(0, remaining - len(chosen))]
+        if len(chosen) < remaining:
+            chosen += [s for s in uk_candidates if s not in chosen][:remaining-len(chosen)]
+    elif uk_active:
+        chosen = uk_candidates[:min(UK_CANDIDATES_PER_SCAN, remaining)]
+    else:
+        chosen = us_candidates[:min(CANDIDATES_PER_SCAN, remaining)]
+    return opened + chosen[:remaining]
 
 
 def selected_watchlist(now, positions):
@@ -204,8 +271,12 @@ def settle_open_position(state, ticker, completed):
         elif candle["open"] > position["target_usd"]:
             exit_price, reason = candle["open"], "gap above target"
 
-        pnl = (exit_price - position["entry_usd"]) * position["qty"] / USD_PER_GBP
-        costs = (exit_price + position["entry_usd"]) * position["qty"] / USD_PER_GBP * 0.001
+        conversion = 1.0 if position.get("currency") == "GBP" else USD_PER_GBP
+        pnl = (exit_price - position["entry_usd"]) * position["qty"] / conversion
+        costs = (exit_price + position["entry_usd"]) * position["qty"] / conversion * 0.001
+        if position.get("currency") == "GBP":
+            # Conservative approximation of UK share stamp duty on purchases.
+            costs += position["entry_usd"] * position["qty"] * 0.005
         pnl = round(pnl - costs, 2)
         state["cash_gbp"] = round(state["cash_gbp"] + pnl, 2)
         exit_time = datetime.fromtimestamp(candle["timestamp"], timezone.utc).isoformat()
@@ -254,8 +325,12 @@ def main(now=None):
     from zoneinfo import ZoneInfo
     now = now if now is not None else datetime.now(timezone.utc)
     ny = now.astimezone(ZoneInfo("America/New_York"))
-    # Avoid trading premarket, weekends and the last 15 minutes of regular session.
+    uk = now.astimezone(ZoneInfo("Europe/London"))
+    # NY and London sessions are independent across daylight saving changes.
     regular = ny.weekday() < 5 and (9, 35) <= (ny.hour, ny.minute) < (16, 0)
+    uk_hours = uk.weekday() < 5 and (8, 5) <= (uk.hour, uk.minute) < (16, 30)
+    uk_enabled = os.environ.get("TRADELAB_UK_INTRADAY_ENABLED", "").lower() == "true"
+    uk_active = uk_hours and uk_enabled
     allow_entry = regular and (ny.hour, ny.minute) < (15, 45)
     state = load_state()
     for key, default in (("last_processed_intraday", {}), ("errors", {}), ("quotes", {}),
@@ -270,39 +345,49 @@ def main(now=None):
         print("Twelve Data key not configured; no simulated trades placed")
         return
     state["errors"].pop("DATA_CONFIG", None)
-    # Morning UK heartbeat: the US session is still shut. Publishing a status
-    # snapshot confirms the scheduler is alive without using Twelve Data credits
-    # or inventing US fills/prices before New York opens.
-    if not regular:
+    state["uk_feed_status"] = ("active_market_hours" if uk_active else
+                               "awaiting_live_uk_data_entitlement" if uk_hours and not uk_enabled else
+                               "outside_uk_session")
+    # Standby until at least one eligible exchange opens. The default UK
+    # status heartbeat does NOT make paid UK requests using a Basic plan.
+    if not regular and not uk_active:
         state["updated_utc"] = now.isoformat()
         state["run_event"] = os.environ.get("TRADELAB_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME", "local")
         state["run_id"] = os.environ.get("GITHUB_RUN_ID", "")
         state["market_session_open"] = False
-        state["model"] = ("TradeLab paper simulator on standby while US market is closed. "
-                          "No US quotes fetched and no virtual trades executed.")
+        state["us_market_session_open"] = False
+        state["uk_market_session_open"] = False
+        state["model"] = ("TradeLab paper simulator on standby. US shares require the US open; "
+                          "UK entries require an explicitly enabled licensed live UK feed.")
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text(json.dumps(state, indent=2) + "\n")
         print("US market closed: TradeLab standing by, no provider requests")
         return
-    # At most four monitored positions + four candidates = eight credits/run.
-    # Extra entries are never forced and all new limits affect NEW trades only.
-    watchlist = selected_watchlist(now, state["positions"])
-    report = {"utc": now.isoformat(), "universe_size": len(FOCUS_SYMBOLS),
+    # UK and US share one eight-credit request budget and the same virtual cash.
+    # The separate UK session is opt-in until an intraday LSE entitlement exists.
+    watchlist = select_active_watchlist(now, state["positions"], regular, uk_active)
+    report = {"utc": now.isoformat(), "universe_size": len(FOCUS_SYMBOLS) + (len(UK_FOCUS_SYMBOLS) if uk_active else 0),
+              "us_market_hours": regular, "uk_market_hours": uk_hours,
+              "uk_feed_status": state["uk_feed_status"],
               "checked": list(watchlist), "outcomes": {}, "new_paper_entries": []}
     for ticker in watchlist:
         try:
-            rows = intraday_prices(ticker)
+            market = "UK" if ticker in UK_FOCUS_SYMBOLS else "US"
+            rows = intraday_prices(ticker, market="UK") if market == "UK" else intraday_prices(ticker)
             # Only fully completed candles; provider may include an unfinished current candle.
             completed = [b for b in rows if b["timestamp"] + 300 <= int(now.timestamp()) - 30]
             if not completed:
                 raise ValueError("No completed 5-minute candles")
             bar = completed[-1]
             bar_time = datetime.fromtimestamp(bar["timestamp"], timezone.utc)
-            ny_bar = bar_time.astimezone(ZoneInfo("America/New_York"))
+            local_bar = bar_time.astimezone(ZoneInfo("Europe/London") if market == "UK" else ZoneInfo("America/New_York"))
+            today_local = uk.date() if market == "UK" else ny.date()
             state["quotes"][ticker] = {"date": bar_time.isoformat(), "close_usd": round(bar["close"], 4),
-                                       "source": "Twelve Data 5-minute bars (limited-venue US feed)"}
+                                       "currency": "GBP" if market == "UK" else "USD",
+                                       "source": "Twelve Data 5-minute bars (LSE live entitlement)" if market == "UK"
+                                                 else "Twelve Data 5-minute bars (limited-venue US feed)"}
             # Never trade old candles or repeat a previously processed candle.
-            if not regular or ny_bar.date() != ny.date() or (now - bar_time) > timedelta(minutes=25):
+            if local_bar.date() != today_local or (now - bar_time) > timedelta(minutes=25):
                 report["outcomes"][ticker] = "stale_or_outside_session"
                 state["errors"].pop(ticker, None)
                 continue
@@ -314,7 +399,7 @@ def main(now=None):
             if position:
                 closed = settle_open_position(state, ticker, completed)
                 report["outcomes"][ticker] = "position_closed" if closed else "position_monitored"
-            elif not allow_entry:
+            elif not (uk_active and (uk.hour, uk.minute) < (16, 15)) if market == "UK" else not allow_entry:
                 report["outcomes"][ticker] = "new_entries_closed"
             else:
                 eligible, reason = assess_breakout(completed)
@@ -331,15 +416,18 @@ def main(now=None):
                 elif eligible:
                     entry = bar["close"]
                     stop, target = entry*(1-STOP_PCT), entry*(1+TARGET_PCT)
-                    risk_qty = RISK_GBP*USD_PER_GBP/(entry-stop)
-                    reserved = sum(p["entry_usd"]*p["qty"]/USD_PER_GBP
-                                   for p in state["positions"].values())
-                    available = max(0, state["cash_gbp"]-reserved)
-                    qty = round(max(0, min(risk_qty, min(available, MAX_POSITION_GBP)*USD_PER_GBP/entry)), 5)
+                    fx = 1.0 if market == "UK" else USD_PER_GBP
+                    risk_qty = RISK_GBP * fx / (entry-stop)
+                    reserved = sum(
+                        p["entry_usd"] * p["qty"] / (1.0 if p.get("currency") == "GBP" else USD_PER_GBP)
+                        for p in state["positions"].values())
+                    available = max(0, state["cash_gbp"] - reserved)
+                    qty = round(max(0, min(risk_qty, min(available, MAX_POSITION_GBP)*fx/entry)), 5)
                     if qty > 0:
                         state["positions"][ticker] = {"date": bar_time.isoformat(),
                             "entry_usd": entry, "stop_usd": round(stop, 4),
-                            "target_usd": round(target, 4), "qty": qty}
+                            "target_usd": round(target, 4), "qty": qty,
+                            "currency": "GBP" if market == "UK" else "USD"}
                         state["events"].append(bar_time.isoformat()+" "+ticker+" opened virtual long (5m)")
                         report["new_paper_entries"].append(ticker)
                         reason = "paper_entry_opened"
@@ -362,9 +450,12 @@ def main(now=None):
     state["updated_utc"] = now.isoformat()
     state["run_event"] = os.environ.get("TRADELAB_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME", "local")
     state["run_id"] = os.environ.get("GITHUB_RUN_ID", "")
-    state["market_session_open"] = regular
-    state["model"] = ("Educational intraday 5-minute paper simulator; Twelve Data free limited-venue feed. "
-                      "Proxy fills at observed candle closes; no live broker execution.")
+    state["market_session_open"] = regular or uk_active
+    state["us_market_session_open"] = regular
+    state["uk_market_session_open"] = uk_active
+    state["model"] = ("Educational intraday 5-minute paper simulator; Twelve Data US limited-venue feed "
+                      "and optional licensed UK intraday feed. Proxy fills at observed candle closes; "
+                      "no live broker execution.")
     state["assumptions"] = {"usd_per_gbp_fixed": USD_PER_GBP, "max_risk_gbp": RISK_GBP,
                             "stop_pct": STOP_PCT*100, "target_pct": TARGET_PCT*100,
                             "max_position_gbp": MAX_POSITION_GBP,
@@ -372,7 +463,9 @@ def main(now=None):
                             "max_daily_entries": MAX_DAILY_ENTRIES,
                             "daily_loss_limit_gbp": DAILY_LOSS_LIMIT_GBP,
                             "breakout_bars": 15, "min_breakout_volume_multiple": 1.35,
-                            "round_trip_cost_pct": 0.2}
+                            "round_trip_cost_pct": 0.2,
+                            "uk_share_purchase_stamp_duty_pct": 0.5,
+                            "uk_intraday_enabled": uk_enabled}
     state["events"] = state["events"][-40:]
     state["trades"] = state["trades"][-500:]
     STATE.parent.mkdir(parents=True, exist_ok=True)
