@@ -376,7 +376,7 @@ def main(now=None):
     uk_enabled = os.environ.get("TRADELAB_UK_INTRADAY_ENABLED", "").lower() == "true"
     uk_active = uk_hours and uk_enabled
     # Default-on for free Twelve Data Basic forex; separate opt-out available.
-    fx_enabled = os.environ.get("TRADELAB_FX_ENABLED", "true").lower() == "true"
+    fx_enabled = os.environ.get("TRADELAB_FX_ENABLED", "").lower() not in ("false", "0", "off")
     fx_active = fx_enabled and uk.weekday() < 5 and (8, 5) <= (uk.hour, uk.minute) < (21, 0)
     allow_entry = regular and (ny.hour, ny.minute) < (15, 45)
     state = load_state()
