@@ -78,6 +78,9 @@ CANDIDATES_PER_SCAN = 5
 MAX_API_SYMBOLS_PER_SCAN = 8
 MAX_OPEN_POSITIONS = 4
 MAX_POSITION_GBP = 250.0
+# Trim only oversized pre-existing positions, and only at a verified fresh
+# completed market candle. Preserve their stop/target for the remaining qty.
+LEGACY_POSITION_CAP_GBP = 200.0
 MAX_DAILY_ENTRIES = 5
 DAILY_LOSS_LIMIT_GBP = 15.0
 STATE = Path("data/paper_state.json")
@@ -335,6 +338,49 @@ def settle_open_position(state, ticker, completed):
         return True
     return False
 
+def rebalance_legacy_position(state, ticker, completed, now):
+    """Partially close oversized historical US paper positions at a fresh bar.
+
+    Do not manufacture cash by rewriting old entry sizes, sell at yesterday's
+    close, or claim any realised P/L until a fresh completed candle exists.
+    The existing stop/target must be checked before this optional trim.
+    """
+    position = state["positions"].get(ticker)
+    if not position or position.get("currency", "USD") != "USD":
+        return False
+    if position.get("asset_class") == "forex" or position.get("rebalance_done"):
+        return False
+    original_qty = position["qty"]
+    entry = position["entry_usd"]
+    allocated = entry * original_qty / USD_PER_GBP
+    if allocated <= MAX_POSITION_GBP:
+        return False
+    remaining_qty = round(LEGACY_POSITION_CAP_GBP * USD_PER_GBP / entry, 5)
+    sale_qty = round(original_qty - remaining_qty, 5)
+    if sale_qty <= 0 or not completed:
+        return False
+    bar = completed[-1]
+    from datetime import timedelta
+    if not timedelta(minutes=5) <= now - datetime.fromtimestamp(bar["timestamp"], timezone.utc) <= timedelta(minutes=25):
+        return False
+    exit_price = bar["close"]
+    cost = (entry + exit_price) * sale_qty / USD_PER_GBP * 0.001
+    pnl = round((exit_price - entry) * sale_qty / USD_PER_GBP - cost, 2)
+    exit_date = datetime.fromtimestamp(bar["timestamp"], timezone.utc).isoformat()
+    position["qty"] = remaining_qty
+    position["rebalance_done"] = True
+    state["cash_gbp"] = round(state["cash_gbp"] + pnl, 2)
+    state["trades"].append({
+        "ticker": ticker, "entry_date": position["date"],
+        "exit_date": exit_date, "entry_usd": entry,
+        "exit_usd": exit_price, "qty": sale_qty,
+        "pnl_gbp": pnl, "reason": "legacy_position_partial_trim",
+        "currency": "USD", "asset_class": "equity",
+    })
+    state["events"].append(exit_date + " " + ticker + " reduced to free virtual capital")
+    return True
+
+
 def ny_trade_date(value):
     """Resolve ISO timestamps to the US stock-market session day."""
     from zoneinfo import ZoneInfo
@@ -451,7 +497,14 @@ def main(now=None):
             position = state["positions"].get(ticker)
             if position:
                 closed = settle_open_position(state, ticker, completed)
-                report["outcomes"][ticker] = "position_closed" if closed else "position_monitored"
+                trimmed = (
+                    not closed and market == "US" and
+                    rebalance_legacy_position(state, ticker, completed, now)
+                )
+                report["outcomes"][ticker] = (
+                    "position_closed" if closed else
+                    "legacy_position_trimmed" if trimmed else "position_monitored"
+                )
             elif not ((uk_active and (uk.hour, uk.minute) < (16, 15)) if market == "UK" else
                       (fx_active and (uk.hour, uk.minute) < (20, 45)) if market == "FX" else allow_entry):
                 report["outcomes"][ticker] = "new_entries_closed"
@@ -518,6 +571,7 @@ def main(now=None):
     state["assumptions"] = {"usd_per_gbp_fixed": USD_PER_GBP, "max_risk_gbp": RISK_GBP,
                             "stop_pct": STOP_PCT*100, "target_pct": TARGET_PCT*100,
                             "max_position_gbp": MAX_POSITION_GBP,
+                            "legacy_position_trim_cap_gbp": LEGACY_POSITION_CAP_GBP,
                             "max_open_positions": MAX_OPEN_POSITIONS,
                             "max_daily_entries": MAX_DAILY_ENTRIES,
                             "daily_loss_limit_gbp": DAILY_LOSS_LIMIT_GBP,
