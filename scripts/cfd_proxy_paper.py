@@ -19,6 +19,11 @@ ESTIMATED_ROUND_TRIP_COST_PCT = 0.0025
 ESTIMATED_DAILY_FINANCING_PCT = 0.0003
 ESTIMATED_FX_RESULT_FEE_PCT = 0.005
 USD_PER_GBP_ASSUMED = 1.33
+# Explicit one-time user paper test request: no new entries beyond this.
+# It is eligible at the next safe session ONLY if the portfolio's daily
+# risk lock is cleared and an actual fresh qualifying signal is available.
+ONE_SHOT_REQUESTED_UTC = "2026-10-29T14:15:28+00:00"
+ONE_SHOT_EXPIRES_UTC = "2026-10-30T19:00:00+00:00"
 
 
 def initialize(state):
@@ -28,6 +33,12 @@ def initialize(state):
     book.setdefault("trades", [])
     book.setdefault("last_processed", {})
     book.setdefault("diagnostics", {})
+    book.setdefault("single_test_request", {
+        "requested_utc": ONE_SHOT_REQUESTED_UTC,
+        "expires_utc": ONE_SHOT_EXPIRES_UTC,
+        "remaining_entries": 1,
+        "status": "pending_risk_and_signal",
+    })
     book["source"] = "UNDERLYING_US_SHARE_PROXY_NOT_BROKER_CFD_QUOTE"
     book["execution"] = "SIMULATED_ONLY_NO_LEVERAGE_NO_BROKER_ORDERS"
     book["separate_research_account"] = True
@@ -172,6 +183,13 @@ def evaluate(book, ticker, bars, now, *, allow_new=True):
     book["last_processed"][ticker] = latest["timestamp"]
     if not allow_new or not (9, 45) <= (local.hour, local.minute) < (15, 0):
         return "entries_paused"
+    request = book["single_test_request"]
+    if int(request.get("remaining_entries", 0)) <= 0:
+        return "single_test_request_fulfilled"
+    if now >= datetime.fromisoformat(request["expires_utc"]):
+        request["status"] = "expired_without_entry"
+        request["remaining_entries"] = 0
+        return "single_test_request_expired"
     today = local.date().isoformat()
     count, realized, traded = today_metrics(book, today)
     if realized <= -LOSS_CUTOFF_GBP or count >= MAX_ENTRIES_DAY:
@@ -199,4 +217,9 @@ def evaluate(book, ticker, bars, now, *, allow_new=True):
         "target_usd": round(target, 5), "qty": qty,
         "quote_type": "underlying_stock_proxy", "leverage": 1.0,
     }
+    request["remaining_entries"] = 0
+    request["status"] = "entry_opened"
+    request["ticker"] = ticker
+    request["side"] = side
+    request["entry_utc"] = datetime.fromtimestamp(latest["timestamp"], timezone.utc).isoformat()
     return "paper_cfd_proxy_entry_" + side
