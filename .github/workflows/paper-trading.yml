@@ -12,12 +12,12 @@ on:
   # because a developer edited a file: Twelve Data limits credits/minute.
   schedule:
     # Fifteen-minute weekday checks: off-peak minutes reduce congestion.
-    # UK time guard in the job enforces the 09:00 start year-round.
+    # UK time guard in the job starts status checks after 08:00 year-round.
     # GitHub schedule delivery is best-effort and may be delayed or dropped.
     # Off-peak minute offsets also re-register the scheduler after missed runs.
-    # 08:00 UTC includes 09:00 during British Summer Time; the UK clock guard
-    # prevents running earlier than 09:00 in winter. GitHub may delay cron.
-    - cron: '9,24,39,54 8-21 * * 1-5'
+    # 07:00 UTC covers 08:00 BST, and 08:00 UTC covers 08:00 GMT.
+    # The first planned scan after the UK open is about 08:09 local time.
+    - cron: '9,24,39,54 7-21 * * 1-5'
 permissions:
   contents: write
 concurrency:
@@ -38,11 +38,11 @@ jobs:
           uk = utc.astimezone(ZoneInfo('Europe/London'))
           ny = utc.astimezone(ZoneInfo('America/New_York'))
           market = ny.weekday() < 5 and time(9, 35) <= ny.time() < time(16, 0)
-          window = uk.weekday() < 5 and uk.time() >= time(9, 0) and ny.time() < time(16, 0)
+          window = uk.weekday() < 5 and uk.time() >= time(8, 0) and ny.time() < time(16, 0)
           # Manual and code-change runs verify the pipeline, even after hours.
-          # The Python engine itself refuses virtual entries outside US hours.
+          # The engine allows LSE entries only with opted-in live UK data.
           event = os.environ.get('GITHUB_EVENT_NAME', '')
-          # Before US opens, run a cheap paper status heartbeat (no market API).
+          # Before US opens, run a UK status heartbeat (no market API unless enabled).
           allowed = window or event in ('push', 'workflow_dispatch')
           print(f'run={str(allowed).lower()}')
           print(f'uk_time={uk.isoformat()}')
@@ -92,6 +92,7 @@ jobs:
         if: steps.window.outputs.run == 'true' && steps.throttle.outputs.run == 'true'
         env:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          TRADELAB_UK_INTRADAY_ENABLED: ${{ vars.TRADELAB_UK_INTRADAY_ENABLED }}
           TRADELAB_TRIGGER: ${{ inputs.origin }}
         run: python scripts/paper_engine.py
       - name: Save simulated portfolio snapshot
@@ -151,5 +152,5 @@ jobs:
                   sys.exit('Scanner health failure: no fresh intraday stock prices')
               print('Market scan verified; recent quotes:', ', '.join(recent))
           else:
-              print('Standby heartbeat verified: US market closed, no API scan needed')
+              print('Standby verified: no active licensed market feed requested')
           PY
