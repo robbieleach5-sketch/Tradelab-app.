@@ -92,7 +92,7 @@ class TestOpenPositionReplay(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "paper_state.json"
             with patch.object(paper_engine, "STATE", path), \
-                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "test-key"}), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "test-key", "TRADELAB_FX_ENABLED": "false"}), \
                  patch.object(paper_engine, "intraday_prices", side_effect=AssertionError("should not fetch")):
                 paper_engine.main(now=datetime(2026, 10, 27, 9, 9, tzinfo=timezone.utc))
             result = json.loads(path.read_text())
@@ -215,7 +215,7 @@ class TestOptionalUKMarket(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "paper_state.json"
             with patch.object(paper_engine, "STATE", path), \
-                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock", "TRADELAB_UK_INTRADAY_ENABLED": "false"}), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock", "TRADELAB_UK_INTRADAY_ENABLED": "false", "TRADELAB_FX_ENABLED": "false"}), \
                  patch.object(paper_engine, "intraday_prices", side_effect=AssertionError("No UK entitlement")):
                 paper_engine.main(now=now)
             saved = json.loads(path.read_text())
@@ -231,7 +231,7 @@ class TestOptionalUKMarket(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "paper_state.json"
             with patch.object(paper_engine, "STATE", path), \
-                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock", "TRADELAB_UK_INTRADAY_ENABLED": "true"}), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock", "TRADELAB_UK_INTRADAY_ENABLED": "true", "TRADELAB_FX_ENABLED": "false"}), \
                  patch.object(paper_engine, "selected_uk_candidates", return_value=["SHEL"]), \
                  patch.object(paper_engine, "intraday_prices", return_value=bars) as prices, \
                  patch.object(paper_engine, "assess_breakout", return_value=(True, "qualified_breakout")):
@@ -307,7 +307,7 @@ class TestOptionalUKMarket(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "paper_state.json"
             with patch.object(paper_engine, "STATE", path), \
-                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock", "TRADELAB_UK_INTRADAY_ENABLED": "true"}), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock", "TRADELAB_UK_INTRADAY_ENABLED": "true", "TRADELAB_FX_ENABLED": "false"}), \
                  patch.object(paper_engine, "selected_uk_candidates", return_value=["SHEL"]), \
                  patch.object(paper_engine, "intraday_prices", return_value=bars), \
                  patch.object(paper_engine, "assess_breakout", return_value=(True, "qualified_breakout")):
@@ -316,6 +316,81 @@ class TestOptionalUKMarket(unittest.TestCase):
             self.assertNotIn("SHEL", saved["positions"])
             self.assertEqual(saved["scan_diagnostics"]["outcomes"]["SHEL"], "provider_error")
 
+
+
+class TestFreeForexMarket(unittest.TestCase):
+    def test_fx_morning_scans_use_existing_free_key(self):
+        now = datetime(2026, 10, 29, 8, 40, tzinfo=timezone.utc)
+        stamp = int((now - timedelta(minutes=10)).timestamp())
+        bar = {"timestamp": stamp, "open": 1.3, "close": 1.3, "high": 1.301,
+               "low": 1.299, "volume": 0}
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "paper_state.json"
+            with patch.object(paper_engine, "STATE", path), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock",
+                                         "TRADELAB_FX_ENABLED": "true",
+                                         "TRADELAB_UK_INTRADAY_ENABLED": "false"}), \
+                 patch.object(paper_engine, "intraday_prices", return_value=[bar]) as api:
+                paper_engine.main(now=now)
+            state = json.loads(path.read_text())
+            self.assertTrue(state["forex_session_open"])
+            self.assertFalse(state["us_market_session_open"])
+            self.assertEqual(api.call_count, 2)
+            self.assertEqual(set(state["scan_diagnostics"]["checked"]), set(paper_engine.FOREX_SYMBOLS))
+            self.assertEqual(state["uk_research_watchlist"], list(paper_engine.UK_FOCUS_SYMBOLS))
+            self.assertFalse(state["positions"])
+
+    def test_fx_breakout_accepts_unreported_volume(self):
+        bars = []
+        for i in range(50):
+            close = 1.3 + i*0.00003
+            bars.append({"close": close, "high": close + 0.0002,
+                         "low": close - 0.0002, "volume": 0})
+        next_close = bars[-1]["high"] + 0.0001
+        bars.append({"close": next_close, "high": next_close + 0.0002,
+                     "low": next_close - 0.0002, "volume": 0})
+        self.assertEqual(paper_engine.assess_forex_breakout(bars),
+                         (True, "qualified_fx_breakout"))
+        self.assertEqual(paper_engine.assess_forex_breakout(bars[:30]),
+                         (False, "fx_insufficient_history"))
+
+    def test_fx_entry_targets_and_position_caps(self):
+        now = datetime(2026, 10, 29, 8, 40, tzinfo=timezone.utc)
+        stamp = int((now - timedelta(minutes=10)).timestamp())
+        bar = {"timestamp": stamp, "close": 1.3, "open": 1.3,
+               "low": 1.299, "high": 1.301, "volume": 0}
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "paper_state.json"
+            with patch.object(paper_engine, "STATE", path), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock",
+                                         "TRADELAB_FX_ENABLED": "true"}), \
+                 patch.object(paper_engine, "intraday_prices", return_value=[bar]), \
+                 patch.object(paper_engine, "assess_forex_breakout",
+                              return_value=(True, "qualified_fx_breakout")):
+                paper_engine.main(now=now)
+            state = json.loads(path.read_text())
+            self.assertEqual(len(state["positions"]), 2)
+            for sym, p in state["positions"].items():
+                self.assertIn(sym, paper_engine.FOREX_SYMBOLS)
+                self.assertEqual(p["asset_class"], "forex")
+                self.assertLessEqual(p["qty"] * p["entry_usd"] / USD_PER_GBP, 250.01)
+                self.assertAlmostEqual(p["stop_usd"]/p["entry_usd"],
+                                       1-paper_engine.FX_STOP_PCT, places=4)
+                self.assertAlmostEqual(p["target_usd"]/p["entry_usd"],
+                                       1+paper_engine.FX_TARGET_PCT, places=4)
+
+    def test_fx_cost_and_credits(self):
+        state = portfolio()
+        state["positions"]["TEST"]["asset_class"] = "forex"
+        self.assertTrue(settle_open_position(state, "TEST", [candle(5, high=105)]))
+        pnl = (104-100)/USD_PER_GBP - 100/USD_PER_GBP*paper_engine.FX_ROUND_TRIP_COST_RATE
+        self.assertEqual(state["trades"][0]["pnl_gbp"], round(pnl, 2))
+        selected = paper_engine.select_active_watchlist(
+            datetime(2026, 10, 29, 15, tzinfo=timezone.utc),
+            {"XOM": {}, "CAT": {}, "GBP/USD": {}}, True, False, True)
+        self.assertLessEqual(len(selected), 8)
+        self.assertEqual(len(selected), len(set(selected)))
+        self.assertEqual(selected[:3], ["XOM", "CAT", "GBP/USD"])
 
 if __name__ == "__main__":
     unittest.main()
