@@ -410,6 +410,33 @@ def daily_limits(state, session_day):
     return len(today_closed_entries) + len(today_open_entries), round(realized, 2), traded_today
 
 
+def publish_risk_status(state, session_day):
+    """Expose reasons the paper engine cannot open trades today."""
+    entries, realized, _ = daily_limits(state, session_day)
+    committed = sum(
+        p["entry_usd"] * p["qty"] /
+        (1.0 if p.get("currency") == "GBP" else USD_PER_GBP)
+        for p in state.get("positions", {}).values()
+    )
+    available = round(max(0.0, state["cash_gbp"] - committed), 2)
+    hit_daily_stop = realized <= -DAILY_LOSS_LIMIT_GBP
+    hit_entry_cap = entries >= MAX_DAILY_ENTRIES
+    state["risk_status"] = {
+        "date_us": session_day.isoformat(),
+        "daily_realized_pnl_gbp": realized,
+        "entries_today": entries,
+        "daily_loss_halt": hit_daily_stop,
+        "daily_entry_cap_reached": hit_entry_cap,
+        "available_virtual_cash_gbp": available,
+        "entry_pause_reason": (
+            "daily_loss_limit" if hit_daily_stop else
+            "daily_entry_limit" if hit_entry_cap else
+            "all_cash_reserved" if available < 1.0 else
+            "none"
+        ),
+    }
+
+
 def main(now=None):
     from datetime import timedelta
     from zoneinfo import ZoneInfo
@@ -444,6 +471,7 @@ def main(now=None):
     # Standby until at least one eligible exchange opens. The default UK
     # status heartbeat does NOT make paid UK requests using a Basic plan.
     if not regular and not uk_active and not fx_active:
+        publish_risk_status(state, ny.date())
         state["updated_utc"] = now.isoformat()
         state["run_event"] = os.environ.get("TRADELAB_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME", "local")
         state["run_id"] = os.environ.get("GITHUB_RUN_ID", "")
@@ -553,6 +581,7 @@ def main(now=None):
     entries_today, realized_today, _ = daily_limits(state, ny.date())
     report["entries_today"] = entries_today
     report["realized_pnl_today_gbp"] = realized_today
+    publish_risk_status(state, ny.date())
     state["scan_diagnostics"] = report
     history = state.get("scan_history", [])
     if not isinstance(history, list):
