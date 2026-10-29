@@ -10,19 +10,20 @@ on:
     # Start opportunities, UTC: independent of the main scan/backup cron.
     # A running watchdog can trigger new scans, so skipped cron ticks no
     # longer prevent progress for the remainder of that market session.
-    - cron: '7,37 13,14,16,18,19 * * 1-5'
+    # Include UK 08:00 open throughout GMT/BST, and afternoon recovery.
+    - cron: '7,37 7,8,10,13,16,19 * * 1-5'
 permissions:
   contents: read
   actions: write
 concurrency:
   group: tradelab-session-watchdog
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   keepalive:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     steps:
-      - name: Watch scanner freshness and dispatch overdue paper scans
+      - name: Keep London forex and US share scans running with fresh snapshots
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -71,9 +72,9 @@ jobs:
           print('Watchdog active: only scans the simulated portfolio; no broker orders.', flush=True)
           # One-time smoke test on watchdog code updates: prove the GitHub
           # Actions token can start the primary workflow without a human.
-          first_ny = datetime.now(timezone.utc).astimezone(ny_tz)
+          first_uk = datetime.now(timezone.utc).astimezone(uk_tz)
           if os.environ.get('GITHUB_EVENT_NAME') == 'push' and (
-              first_ny.weekday() < 5 and clock(9, 35) <= first_ny.time() < clock(16, 0)
+              first_uk.weekday() < 5 and clock(8, 5) <= first_uk.time() < clock(21, 0)
           ):
               dispatch(endpoint, 'watchdog')
               last_request = time.monotonic()
@@ -81,10 +82,10 @@ jobs:
               utc = datetime.now(timezone.utc)
               ny = utc.astimezone(ny_tz)
               uk = utc.astimezone(uk_tz)
-              if ny.weekday() >= 5 or uk.weekday() >= 5 or ny.time() >= clock(16, 0):
-                  print('US regular market session is over; stopping watchdog.', flush=True)
+              if uk.weekday() >= 5 or uk.time() >= clock(21, 0):
+                  print('London/US combined paper session is over; stopping watchdog.', flush=True)
                   sys.exit(0)
-              if uk.time() < clock(9, 0) or ny.time() < clock(9, 35):
+              if uk.time() < clock(8, 5):
                   time.sleep(60)
                   continue
               try:
@@ -110,8 +111,8 @@ jobs:
 
           # A new short-lived watchdog can take over without relying on a
           # scheduled event. GITHUB_TOKEN workflow_dispatch is supported.
-          ny = datetime.now(timezone.utc).astimezone(ny_tz)
-          if ny.weekday() < 5 and clock(9, 35) <= ny.time() < clock(16, 0):
+          uk = datetime.now(timezone.utc).astimezone(uk_tz)
+          if uk.weekday() < 5 and clock(8, 5) <= uk.time() < clock(20, 45):
               try:
                   dispatch(f'repos/{repo}/actions/workflows/scan-watchdog.yml/dispatches')
                   print('Handed watch to next bounded session.', flush=True)
