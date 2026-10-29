@@ -474,5 +474,45 @@ class TestRiskStatusDisplay(unittest.TestCase):
         self.assertEqual(state["risk_status"]["entry_pause_reason"], "none")
         self.assertEqual(state["risk_status"]["available_virtual_cash_gbp"], 937.62)
 
+
+class TestConfirmedEquityProfitBank(unittest.TestCase):
+    def test_legacy_target_four_pct_can_bank_small_confirmed_profit(self):
+        state = portfolio()
+        state["positions"]["TEST"]["target_usd"] = 104.0
+        candle_at = candle(5)
+        candle_at["close"] = 100.7
+        candle_at["high"] = 101.0
+        candle_at["low"] = 99.8
+        self.assertTrue(settle_open_position(state, "TEST", [candle_at]))
+        self.assertEqual(state["trades"][0]["reason"], "early_profit_bank")
+        self.assertGreater(state["trades"][0]["pnl_gbp"], 0)
+
+    def test_stop_always_precedes_early_profit_in_same_bar(self):
+        state = portfolio()
+        candle_at = candle(5, low=97.5)
+        candle_at["close"] = 101.0
+        self.assertTrue(settle_open_position(state, "TEST", [candle_at]))
+        self.assertEqual(state["trades"][0]["reason"], "stop")
+
+    def test_forex_positions_do_not_inherit_equity_profit_bank(self):
+        state = portfolio()
+        state["positions"]["TEST"]["asset_class"] = "forex"
+        candle_at = candle(5)
+        candle_at["close"] = 101.0
+        candle_at["high"] = 102.0
+        self.assertFalse(settle_open_position(state, "TEST", [candle_at]))
+
+    def test_shared_underlying_scanner_stays_eight_requests(self):
+        state = {"cfd_paper": {"positions": {"NVDA": {"side": "short"}}}}
+        positions = {"XOM": {}, "CAT": {}}
+        watch = paper_engine.select_active_watchlist(
+            datetime(2026, 10, 29, 15, 10, tzinfo=timezone.utc),
+            positions, True, False, True, state
+        )
+        self.assertEqual(watch[:2], list(positions))
+        self.assertIn("NVDA", watch)
+        self.assertLessEqual(len(watch), 8)
+        self.assertEqual(len(watch), len(set(watch)))
+
 if __name__ == "__main__":
     unittest.main()
