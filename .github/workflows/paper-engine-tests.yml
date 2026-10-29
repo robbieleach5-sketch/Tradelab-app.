@@ -4,12 +4,16 @@ on:
     paths:
       - 'scripts/paper_engine.py'
       - 'tests/test_paper_engine.py'
+      - 'tests/test_cfd_proxy_paper.py'
+      - 'scripts/cfd_proxy_paper.py'
       - '.github/workflows/paper-engine-tests.yml'
   push:
     branches: [main]
     paths:
       - 'scripts/paper_engine.py'
       - 'tests/test_paper_engine.py'
+      - 'tests/test_cfd_proxy_paper.py'
+      - 'scripts/cfd_proxy_paper.py'
       - '.github/workflows/paper-engine-tests.yml'
 permissions:
   contents: read
@@ -23,5 +27,5 @@ jobs:
           python-version: '3.12'
       - name: Compile and run paper engine tests
         run: |
-          python -m py_compile scripts/paper_engine.py tests/test_paper_engine.py
-          python -m unittest discover -s tests -p 'test_paper_engine.py' -v
+          python -m py_compile scripts/paper_engine.py scripts/cfd_proxy_paper.py tests/test_paper_engine.py tests/test_cfd_proxy_paper.py
+          python -m unittest discover -s tests -p 'test_*.py' -v
