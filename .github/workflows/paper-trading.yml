@@ -93,6 +93,7 @@ jobs:
         env:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
           TRADELAB_UK_INTRADAY_ENABLED: ${{ vars.TRADELAB_UK_INTRADAY_ENABLED }}
+          TRADELAB_FX_ENABLED: ${{ vars.TRADELAB_FX_ENABLED }}
           TRADELAB_TRIGGER: ${{ inputs.origin }}
         run: python scripts/paper_engine.py
       - name: Save simulated portfolio snapshot
