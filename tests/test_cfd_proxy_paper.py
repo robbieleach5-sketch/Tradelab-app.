@@ -106,7 +106,14 @@ class TestCfdProxy(unittest.TestCase):
                 high=pos["stop_usd"]+.3, low=pos["stop_usd"]-.4)
         self.assertEqual(cfd.evaluate(book, "NVDA", [b], after, allow_new=False), "closed_at_stop")
         self.assertNotIn("NVDA", book["positions"])
+        # The one-shot token has already been spent; an existing position
+        # must still be closed even when the separate CFD daily loss cap is hit.
         self.assertEqual(cfd.evaluate(book, "TSLA", [bar(after-timedelta(minutes=10), 100)],
+                                      after), "single_test_request_fulfilled")
+        guarded = cfd.initialize({})
+        guarded["trades"].append({"ticker": "AMD", "entry_day": NOW.date().isoformat(),
+                                  "exit_day": NOW.date().isoformat(), "pnl_gbp": -12.0})
+        self.assertEqual(cfd.evaluate(guarded, "TSLA", [bar(after-timedelta(minutes=10), 100)],
                                       after), "cfd_daily_risk_halt")
 
     def test_session_cutoff_closes_open_position_without_overnight(self):
@@ -120,6 +127,33 @@ class TestCfdProxy(unittest.TestCase):
         self.assertEqual(cfd.evaluate(book, "NVDA", [b], ny_close), "session_exit")
         self.assertEqual(book["positions"], {})
 
+
+
+    def test_user_one_shot_allows_exactly_one_demo_entry(self):
+        book = cfd.initialize({})
+        self.assertEqual(book["single_test_request"]["remaining_entries"], 1)
+        self.assertEqual(cfd.evaluate(book, "NVDA", history(), NOW),
+                         "paper_cfd_proxy_entry_long")
+        self.assertEqual(book["single_test_request"]["remaining_entries"], 0)
+        self.assertEqual(book["single_test_request"]["status"], "entry_opened")
+        self.assertEqual(cfd.evaluate(book, "AMD", history(descending=True), NOW),
+                         "single_test_request_fulfilled")
+        self.assertEqual(len(book["positions"]), 1)
+
+    def test_one_shot_expiration_does_not_create_demo_position(self):
+        book = cfd.initialize({})
+        book["single_test_request"]["expires_utc"] = (NOW-timedelta(minutes=1)).isoformat()
+        self.assertEqual(cfd.evaluate(book, "NVDA", history(), NOW),
+                         "single_test_request_expired")
+        self.assertEqual(book["single_test_request"]["status"], "expired_without_entry")
+        self.assertFalse(book["positions"])
+
+    def test_daily_loss_lock_precedes_one_shot_entry(self):
+        book = cfd.initialize({})
+        self.assertEqual(cfd.evaluate(book, "NVDA", history(), NOW, allow_new=False),
+                         "entries_paused")
+        self.assertEqual(book["single_test_request"]["remaining_entries"], 1)
+        self.assertFalse(book["positions"])
 
 if __name__ == "__main__":
     unittest.main()

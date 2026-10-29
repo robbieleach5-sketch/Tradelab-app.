@@ -39,7 +39,9 @@ let equity=1000,peak=1000,maxDD=0;for(const p of pnl){equity+=p;peak=Math.max(pe
 const pf=grossLoss?(grossWin/grossLoss).toFixed(2):"N/A";
 set("performance",trades.length?"Completed: "+trades.length+" • Win rate: "+(100*wins.length/trades.length).toFixed(1)+"% • Net realised: £"+net.toFixed(2)+" • Profit factor: "+pf+" • Max closed-trade drawdown: "+maxDD.toFixed(2)+"%":"No completed virtual trades yet — profitability cannot be assessed.");
 const cfd=s.cfd_paper||{},cfdOpen=Object.entries(cfd.positions||{}),cfdClosed=cfd.trades||[];
-set("cfd-summary","DEMO balance: £"+Number(cfd.cash_gbp??1000).toFixed(2)+" • Open: "+cfdOpen.length+" • Closed: "+cfdClosed.length+" • "+(risk.daily_loss_halt?"New entries paused: main book daily loss limit":"Entry signals not guaranteed"));
+const cfdRequest=cfd.single_test_request||{};
+const cfdRequestLabel=cfdRequest.status==="entry_opened"?"One-off trade entered: "+cfdRequest.ticker+" ("+cfdRequest.side+")":cfdRequest.status==="expired_without_entry"?"One-off test expired without a valid entry":cfdRequest.remaining_entries===1?"One-off test queued; must pass market and risk checks":"No confirmed one-off entry";
+set("cfd-summary","DEMO balance: £"+Number(cfd.cash_gbp??1000).toFixed(2)+" • Open: "+cfdOpen.length+" • Closed: "+cfdClosed.length+" • "+cfdRequestLabel+" • "+(risk.daily_loss_halt?"New entries paused today: main daily loss limit":"New entries require valid signals"));
 set("cfd-positions",table(["Underlying proxy","Side","Entry $","Target $","Stop $"],cfdOpen.map(([sym,p])=>[sym,p.side,Number(p.entry_usd).toFixed(2),Number(p.target_usd).toFixed(2),Number(p.stop_usd).toFixed(2)])));
 set("cfd-trades",table(["Closed proxy","Side","Reason","Net demo P/L"],cfdClosed.slice(-8).reverse().map(t=>[t.ticker,t.side,t.reason,"£"+Number(t.pnl_gbp).toFixed(2)])));
 set("positions",table(["Symbol","Entry","Stop","Target","Qty"],pos.map(([sym,p])=>{const currency=p.currency==="GBP"?"£":"$";return [sym,currency+Number(p.entry_usd).toFixed(p.asset_class==="forex"?5:2),currency+Number(p.stop_usd).toFixed(p.asset_class==="forex"?5:2),currency+Number(p.target_usd).toFixed(p.asset_class==="forex"?5:2),p.qty]})));

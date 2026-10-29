@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Alpaca IEX intraday educational paper engine. No broker orders."""
 import json, os, urllib.request, urllib.parse
-from scripts import cfd_proxy_paper
+# Works both as python scripts/paper_engine.py in Actions and as
+# a package import under unittest.
+if __package__:
+    from . import cfd_proxy_paper
+else:
+    import cfd_proxy_paper
 from datetime import datetime, timezone
 from pathlib import Path
 

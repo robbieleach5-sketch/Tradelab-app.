@@ -514,5 +514,24 @@ class TestConfirmedEquityProfitBank(unittest.TestCase):
         self.assertLessEqual(len(watch), 8)
         self.assertEqual(len(watch), len(set(watch)))
 
+
+class TestActionsScriptStartup(unittest.TestCase):
+    def test_script_path_runs_without_package_import_error(self):
+        """The exact command used by GitHub Actions must start successfully."""
+        import subprocess
+        import sys
+        script = Path(__file__).resolve().parents[1] / "scripts" / "paper_engine.py"
+        with TemporaryDirectory() as directory:
+            proc = subprocess.run(
+                [sys.executable, str(script)], cwd=directory,
+                env={**os.environ, "TWELVE_DATA_API_KEY": ""},
+                capture_output=True, text=True, timeout=12,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            result = json.loads((Path(directory)/"data"/"paper_state.json").read_text())
+            self.assertIn("DATA_CONFIG", result["errors"])
+            self.assertEqual(result["cfd_paper"]["single_test_request"]["remaining_entries"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
