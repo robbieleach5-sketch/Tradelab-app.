@@ -106,7 +106,14 @@ class TestCfdProxy(unittest.TestCase):
                 high=pos["stop_usd"]+.3, low=pos["stop_usd"]-.4)
         self.assertEqual(cfd.evaluate(book, "NVDA", [b], after, allow_new=False), "closed_at_stop")
         self.assertNotIn("NVDA", book["positions"])
+        # The one-shot token has already been spent; an existing position
+        # must still be closed even when the separate CFD daily loss cap is hit.
         self.assertEqual(cfd.evaluate(book, "TSLA", [bar(after-timedelta(minutes=10), 100)],
+                                      after), "single_test_request_fulfilled")
+        guarded = cfd.initialize({})
+        guarded["trades"].append({"ticker": "AMD", "entry_day": NOW.date().isoformat(),
+                                  "exit_day": NOW.date().isoformat(), "pnl_gbp": -12.0})
+        self.assertEqual(cfd.evaluate(guarded, "TSLA", [bar(after-timedelta(minutes=10), 100)],
                                       after), "cfd_daily_risk_halt")
 
     def test_session_cutoff_closes_open_position_without_overnight(self):
