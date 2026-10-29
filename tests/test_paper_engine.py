@@ -208,5 +208,114 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
                 self.assertAlmostEqual(position["target_usd"] / position["entry_usd"], 1.015, places=4)
 
 
+
+class TestOptionalUKMarket(unittest.TestCase):
+    def test_uk_disabled_does_not_request_live_data(self):
+        now = datetime(2026, 10, 29, 8, 15, tzinfo=timezone.utc)
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "paper_state.json"
+            with patch.object(paper_engine, "STATE", path), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock", "TRADELAB_UK_INTRADAY_ENABLED": "false"}), \
+                 patch.object(paper_engine, "intraday_prices", side_effect=AssertionError("No UK entitlement")):
+                paper_engine.main(now=now)
+            saved = json.loads(path.read_text())
+            self.assertEqual(saved["uk_feed_status"], "awaiting_live_uk_data_entitlement")
+            self.assertFalse(saved["market_session_open"])
+            self.assertEqual(saved["positions"], {})
+
+    def test_uk_enabled_can_enter_uk_only_session_with_gbp_price(self):
+        now = datetime(2026, 10, 29, 8, 40, tzinfo=timezone.utc)
+        stamp = int((now - timedelta(minutes=10)).timestamp())
+        bars = [{"timestamp": stamp, "close": 10.0, "open": 10.0,
+                 "low": 9.9, "high": 10.1, "volume": 250}]
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "paper_state.json"
+            with patch.object(paper_engine, "STATE", path), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock", "TRADELAB_UK_INTRADAY_ENABLED": "true"}), \
+                 patch.object(paper_engine, "selected_uk_candidates", return_value=["SHEL"]), \
+                 patch.object(paper_engine, "intraday_prices", return_value=bars) as prices, \
+                 patch.object(paper_engine, "assess_breakout", return_value=(True, "qualified_breakout")):
+                paper_engine.main(now=now)
+            saved = json.loads(path.read_text())
+            self.assertTrue(saved["uk_market_session_open"])
+            self.assertFalse(saved["us_market_session_open"])
+            self.assertEqual(saved["uk_feed_status"], "active_market_hours")
+            self.assertEqual(list(saved["positions"]), ["SHEL"])
+            pos = saved["positions"]["SHEL"]
+            self.assertEqual(pos["currency"], "GBP")
+            self.assertLessEqual(pos["qty"] * pos["entry_usd"], 250.01)
+            self.assertAlmostEqual(pos["stop_usd"], 9.9, places=4)
+            self.assertAlmostEqual(pos["target_usd"], 10.15, places=4)
+            prices.assert_called_once_with("SHEL", market="UK")
+
+    def test_lse_currency_validation_and_gbx_conversion(self):
+        from io import BytesIO
+        base = {"meta": {"mic_code": "XLON", "exchange": "London Stock Exchange",
+                         "currency": "GBX"}, "values": [{
+            "datetime": "2026-10-29 08:10:00", "open": "1000",
+            "high": "1005", "low": "995", "close": "1002", "volume": "1100",
+        }]}
+        class Response:
+            def __init__(self, payload):
+                self.payload = payload
+            def __enter__(self):
+                return BytesIO(json.dumps(self.payload).encode("utf-8"))
+            def __exit__(self, *_):
+                return False
+        with patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock"}), \
+             patch.object(paper_engine.urllib.request, "urlopen", return_value=Response(base)):
+            bars = paper_engine.intraday_prices("SHEL", market="UK")
+        self.assertEqual(bars[0]["close"], 10.02)
+        self.assertEqual(bars[0]["volume"], 1100)
+        # GBp (mixed-case pence) must not be mistaken for GBP pounds.
+        pence = dict(base, meta=dict(base["meta"], currency="GBp"))
+        with patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock"}), \
+             patch.object(paper_engine.urllib.request, "urlopen", return_value=Response(pence)):
+            self.assertEqual(paper_engine.intraday_prices("SHEL", market="UK")[0]["close"], 10.02)
+        for meta in ({"mic_code": "XNAS", "currency": "GBP"},
+                     {"mic_code": "XLON", "currency": "USD"}, {}):
+            bad = dict(base, meta=meta)
+            with patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock"}), \
+                 patch.object(paper_engine.urllib.request, "urlopen", return_value=Response(bad)):
+                with self.assertRaises(ValueError):
+                    paper_engine.intraday_prices("SHEL", market="UK")
+
+    def test_overlap_never_exceeds_eight_api_symbols(self):
+        positions = {"CAT": {"currency": "USD"}, "XOM": {"currency": "USD"},
+                     "SHEL": {"currency": "GBP"}, "AZN": {"currency": "GBP"}}
+        scan = paper_engine.select_active_watchlist(BASE, positions, True, True)
+        self.assertEqual(len(scan), 8)
+        self.assertEqual(len(scan), len(set(scan)))
+        self.assertEqual(scan[:4], list(positions))
+        self.assertTrue(any(s in paper_engine.UK_FOCUS_SYMBOLS for s in scan[4:]))
+        self.assertTrue(any(s in paper_engine.FOCUS_SYMBOLS for s in scan[4:]))
+
+    def test_uk_settlement_uses_gbp_and_purchase_stamp_duty(self):
+        state = portfolio()
+        state["positions"]["TEST"]["currency"] = "GBP"
+        state["positions"]["TEST"]["target_usd"] = 104.0
+        state["positions"]["TEST"]["entry_usd"] = 100.0
+        state["positions"]["TEST"]["qty"] = 1
+        self.assertTrue(settle_open_position(state, "TEST", [candle(5, high=105)]))
+        self.assertEqual(state["trades"][0]["pnl_gbp"], round(4.0 - 0.204 - 0.5, 2))
+
+    def test_uk_scan_no_replay_on_future_candles(self):
+        now = datetime(2026, 10, 29, 8, 40, tzinfo=timezone.utc)
+        bars = [{"timestamp": int((now + timedelta(minutes=5)).timestamp()),
+                 "close": 10.0, "open": 10.0, "low": 9.9,
+                 "high": 10.1, "volume": 250}]
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "paper_state.json"
+            with patch.object(paper_engine, "STATE", path), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock", "TRADELAB_UK_INTRADAY_ENABLED": "true"}), \
+                 patch.object(paper_engine, "selected_uk_candidates", return_value=["SHEL"]), \
+                 patch.object(paper_engine, "intraday_prices", return_value=bars), \
+                 patch.object(paper_engine, "assess_breakout", return_value=(True, "qualified_breakout")):
+                paper_engine.main(now=now)
+            saved = json.loads(path.read_text())
+            self.assertNotIn("SHEL", saved["positions"])
+            self.assertEqual(saved["scan_diagnostics"]["outcomes"]["SHEL"], "provider_error")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -32,20 +32,20 @@ if(!response.ok)throw Error("Published scan unavailable (HTTP "+response.status+
 const s=await response.json();
 if(!s||typeof s!=="object"||!s.updated_utc)throw Error("Published scan has no update time");
 const age=(Date.now()-Date.parse(s.updated_utc))/60000;
-const marketOpen=usOpenNow(),stale=marketOpen&&(!Number.isFinite(age)||age>40);
+const marketOpen=usOpenNow()||Boolean(s.uk_market_session_open),ukPending=s.uk_feed_status==="awaiting_live_uk_data_entitlement",stale=marketOpen&&(!Number.isFinite(age)||age>40);
 const newScan=!previousUpdate||previousUpdate!==s.updated_utc;
 previousUpdate=s.updated_utc;
 const trigger=({schedule:"Scheduled",watchdog:"Automatic watchdog",push:"Code-change test",workflow_dispatch:"Manual test"})[s.run_event]||"Unknown";
-text("scanner-state",(marketOpen?(stale?"⚠ Scheduled scan overdue":"● Market session — snapshot loaded"):"● US market closed")+" • Last scan "+ukTime(s.updated_utc)+" UK"+(Number.isFinite(age)?" ("+Math.max(0,Math.floor(age))+" mins ago)":""));
+text("scanner-state",(marketOpen?(stale?"⚠ Scheduled scan overdue":"● Market session — snapshot loaded"):(ukPending?"● UK market open — live UK data not enabled":"● Trading sessions on standby"))+" • Last scan "+ukTime(s.updated_utc)+" UK"+(Number.isFinite(age)?" ("+Math.max(0,Math.floor(age))+" mins ago)":""));
 text("scanner-tap-status",(manual?"✔ Refresh checked. ":"")+"Last run type: "+trigger+((s.run_event==="schedule"||s.run_event==="watchdog")?" ✓":" • Scheduled updates not yet verified")+".");
 const positions=Object.entries(s.positions||{}),trades=Array.isArray(s.trades)?s.trades:[];
 text("scanner-metrics","Paper balance £"+Number(s.cash_gbp||0).toFixed(2)+" • Open positions "+positions.length+" • Closed trades "+trades.length);
-list("scanner-positions","Open virtual positions",positions.map(([ticker,p])=>ticker+" • Entry $"+Number(p.entry_usd).toFixed(2)+" • Stop $"+Number(p.stop_usd).toFixed(2)+" • Target $"+Number(p.target_usd).toFixed(2)));
+list("scanner-positions","Open virtual positions",positions.map(([ticker,p])=>{const unit=p.currency==="GBP"?"£":"$";return ticker+" • Entry "+unit+Number(p.entry_usd).toFixed(2)+" • Stop "+unit+Number(p.stop_usd).toFixed(2)+" • Target "+unit+Number(p.target_usd).toFixed(2)}));
 const quotes=Object.entries(s.quotes||{}).filter(([sym,q])=>String(q.source||"").includes("Twelve Data")&&Number.isFinite(Date.parse(q.date))).sort((a,b)=>Date.parse(b[1].date)-Date.parse(a[1].date)).slice(0,8);
-list("scanner-quotes","Latest intraday quotes",quotes.map(([ticker,q])=>ticker+" • $"+Number(q.close_usd).toFixed(2)+" • "+ukTime(q.date)+" UK"));
+list("scanner-quotes","Latest intraday quotes",quotes.map(([ticker,q])=>ticker+" • "+(q.currency==="GBP"?"£":"$")+Number(q.close_usd).toFixed(2)+" • "+ukTime(q.date)+" UK"));
 const history=Array.isArray(s.scan_history)?s.scan_history.slice(-20):[];
 const reasons={};
-const readable={no_20bar_breakout:"No confirmed breakout",trend_not_confirmed:"Weak 5-minute trend",insufficient_breakout_volume:"Insufficient volume",missing_volume:"Provider volume unavailable",breakout_too_extended:"Overextended breakout",insufficient_history:"Not enough candle history",portfolio_full:"At 3-position limit",stale_or_outside_session:"Stale prices"};
+const readable={no_20bar_breakout:"No confirmed breakout",no_15bar_breakout:"No confirmed breakout",trend_not_confirmed:"Weak 5-minute trend",insufficient_breakout_volume:"Insufficient volume",missing_volume:"Provider volume unavailable",breakout_too_extended:"Overextended breakout",insufficient_history:"Not enough candle history",portfolio_full:"At 4-position limit",stale_or_outside_session:"Stale prices"};
 for(const scan of history){for(const reason of Object.values(scan.outcomes||{})){if(readable[reason])reasons[reason]=(reasons[reason]||0)+1;}}
 const top=Object.entries(reasons).sort((a,b)=>b[1]-a[1]).slice(0,3);
 text("scanner-selection",history.length?"Focused scanner: "+(s.scan_diagnostics?.universe_size||16)+" stocks • Last "+history.length+" scans • Most common reasons for skipping trades: "+(top.length?top.map(([key,n])=>readable[key]+" ("+n+")").join("; "):"No new signals to report"):"Entry-selection diagnostics will appear after the next scanner update.");
