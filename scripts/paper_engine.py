@@ -123,10 +123,10 @@ def intraday_prices(ticker, market="US"):
         venue = str(meta.get("exchange") or "").lower()
         if str(meta.get("mic_code") or "").upper() != "XLON" and "london" not in venue and venue != "lse":
             raise ValueError("UK data rejected: provider did not confirm London Stock Exchange")
-        currency = str(meta.get("currency") or "").upper()
-        if currency in ("GBX", "GBPENCE"):
+        raw_currency = str(meta.get("currency") or "")
+        if raw_currency in ("GBX", "GBp", "GBpence", "GB PENCE"):
             multiplier = 0.01
-        elif currency != "GBP":
+        elif raw_currency != "GBP":
             raise ValueError("UK data rejected: unsupported or missing price currency")
     rows = []
     tz = ZoneInfo(tz_name)
