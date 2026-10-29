@@ -170,7 +170,6 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
         self.assertEqual(paper_engine.assess_breakout(bars), (False, "insufficient_breakout_volume"))
 
     def test_daily_limits_count_entries_and_closed_losses(self):
-        day = datetime(2026, 10, 29, 15, tzinfo=timezone.utc).date()
         from zoneinfo import ZoneInfo
         day = datetime(2026, 10, 29, 15, tzinfo=timezone.utc).astimezone(ZoneInfo("America/New_York")).date()
         state = {
@@ -194,10 +193,10 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
                  "low": 99.0, "high": 101.0, "volume": 200}]
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "paper_state.json"
-            with patch.object(paper_engine, "STATE", path), \\
-                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "fake-key"}), \\
-                 patch.object(paper_engine, "selected_watchlist", return_value=["NVDA", "TSLA"]), \\
-                 patch.object(paper_engine, "intraday_prices", return_value=bars), \\
+            with patch.object(paper_engine, "STATE", path), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "fake-key"}), \
+                 patch.object(paper_engine, "selected_watchlist", return_value=["NVDA", "TSLA"]), \
+                 patch.object(paper_engine, "intraday_prices", return_value=bars), \
                  patch.object(paper_engine, "assess_breakout", return_value=(True, "qualified_breakout")):
                 paper_engine.main(now=now)
             state = json.loads(path.read_text())
