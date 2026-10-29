@@ -64,11 +64,16 @@ FOCUS_SYMBOLS = (
     "PLTR", "MU", "CRWD", "JPM", "XOM", "CAT", "UNH", "COST",
 )
 CANDIDATES_PER_SCAN = 5
+MAX_API_SYMBOLS_PER_SCAN = 8
+MAX_OPEN_POSITIONS = 4
+MAX_POSITION_GBP = 250.0
+MAX_DAILY_ENTRIES = 5
+DAILY_LOSS_LIMIT_GBP = 15.0
 STATE = Path("data/paper_state.json")
-RISK_GBP = 10.0
+RISK_GBP = 5.0
 START_GBP = 1000.0
-STOP_PCT = 0.02
-TARGET_PCT = 0.04
+STOP_PCT = 0.01
+TARGET_PCT = 0.015
 # Fixed conversion assumption, NOT a live FX rate.
 USD_PER_GBP = 1.33
 
@@ -116,21 +121,20 @@ def intraday_prices(ticker):
 
 
 def selected_watchlist(now, positions):
-    """Always protect open trades; rotate five candidates through a focused list.
+    """Monitor up to four positions first, then rotate focused entry candidates.
 
-    This changes discovery only: stop/target settlement and risk limits remain
-    exactly the same for the paper portfolio.
+    Never exceed eight data calls per scan on the limited free API plan.
     """
     universe = FOCUS_SYMBOLS
     slot = int(now.timestamp() // 900)
     start = (slot * CANDIDATES_PER_SCAN) % len(universe)
-    opened = list(positions)[:3]
+    opened = list(positions)[:MAX_OPEN_POSITIONS]
     candidates = []
     for step in range(len(universe)):
         ticker = universe[(start + step) % len(universe)]
         if ticker not in positions and ticker not in candidates:
             candidates.append(ticker)
-        if len(candidates) >= min(CANDIDATES_PER_SCAN, 8 - len(opened)):
+        if len(candidates) >= min(CANDIDATES_PER_SCAN, MAX_API_SYMBOLS_PER_SCAN - len(opened)):
             break
     return opened + candidates
 
@@ -138,9 +142,8 @@ def selected_watchlist(now, positions):
 def assess_breakout(completed):
     """Identify why a new 5-minute paper entry is rejected.
 
-    Criteria deliberately preserve the previous trend, breakout, volume and
-    0.5% anti-chase rules. Recording reasons is safer than guessing that a
-    looser filter would improve returns without a representative backtest.
+    Retain the long-term trend, positive volume and 0.5% anti-chase checks.
+    A 15-bar breakout and 1.35x volume are exploratory, not validated edge.
     """
     previous = completed[:-1]
     if len(previous) < 50:
@@ -148,16 +151,16 @@ def assess_breakout(completed):
     bar = completed[-1]
     last20 = sum(b["close"] for b in previous[-20:]) / 20
     last50 = sum(b["close"] for b in previous[-50:]) / 50
-    breakout_level = max(b["high"] for b in previous[-20:])
+    breakout_level = max(b["high"] for b in previous[-15:])
     volumes = [b.get("volume", 0) for b in previous[-20:]]
     if len(volumes) != 20 or any(v <= 0 for v in volumes) or bar.get("volume", 0) <= 0:
         return False, "missing_volume"
     if not (last20 > last50 and bar["close"] > last20):
         return False, "trend_not_confirmed"
     if bar["close"] <= breakout_level:
-        return False, "no_20bar_breakout"
+        return False, "no_15bar_breakout"
     avg_volume = sum(volumes) / 20
-    if bar["volume"] < 1.5 * avg_volume:
+    if bar["volume"] < 1.35 * avg_volume:
         return False, "insufficient_breakout_volume"
     if bar["close"] > breakout_level * 1.005:
         return False, "breakout_too_extended"
@@ -217,6 +220,35 @@ def settle_open_position(state, ticker, completed):
         return True
     return False
 
+def ny_trade_date(value):
+    """Resolve ISO timestamps to the US stock-market session day."""
+    from zoneinfo import ZoneInfo
+    try:
+        stamp = datetime.fromisoformat(value)
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        return stamp.astimezone(ZoneInfo("America/New_York")).date()
+    except (TypeError, ValueError):
+        return None
+
+
+def daily_limits(state, session_day):
+    """Count today's simulated entries and realized P/L, including older holds."""
+    trades = state.get("trades", [])
+    positions = state.get("positions", {})
+    today_closed_entries = [t for t in trades if ny_trade_date(t.get("entry_date")) == session_day]
+    today_open_entries = [
+        ticker for ticker, position in positions.items()
+        if ny_trade_date(position.get("date")) == session_day
+    ]
+    traded_today = {t.get("ticker") for t in today_closed_entries} | set(today_open_entries)
+    realized = sum(
+        float(t.get("pnl_gbp") or 0) for t in trades
+        if ny_trade_date(t.get("exit_date")) == session_day
+    )
+    return len(today_closed_entries) + len(today_open_entries), round(realized, 2), traded_today
+
+
 def main(now=None):
     from datetime import timedelta
     from zoneinfo import ZoneInfo
@@ -252,8 +284,8 @@ def main(now=None):
         STATE.write_text(json.dumps(state, indent=2) + "\n")
         print("US market closed: TradeLab standing by, no provider requests")
         return
-    # At most 3 open positions + 5 rotating candidates = 8 credits/run.
-    # Test this faster focused rotation before considering broader discovery.
+    # At most four monitored positions + four candidates = eight credits/run.
+    # Extra entries are never forced and all new limits affect NEW trades only.
     watchlist = selected_watchlist(now, state["positions"])
     report = {"utc": now.isoformat(), "universe_size": len(FOCUS_SYMBOLS),
               "checked": list(watchlist), "outcomes": {}, "new_paper_entries": []}
@@ -286,9 +318,16 @@ def main(now=None):
                 report["outcomes"][ticker] = "new_entries_closed"
             else:
                 eligible, reason = assess_breakout(completed)
-                # Keep existing position count, stop/target distance and £10 risk.
-                if eligible and len(state["positions"]) >= 3:
+                # Re-check limits after every entry/exit in this scan.
+                entries_today, realized_today, traded_today = daily_limits(state, ny.date())
+                if eligible and len(state["positions"]) >= MAX_OPEN_POSITIONS:
                     reason = "portfolio_full"
+                elif eligible and entries_today >= MAX_DAILY_ENTRIES:
+                    reason = "daily_entry_limit"
+                elif eligible and realized_today <= -DAILY_LOSS_LIMIT_GBP:
+                    reason = "daily_loss_limit"
+                elif eligible and ticker in traded_today:
+                    reason = "already_traded_this_session"
                 elif eligible:
                     entry = bar["close"]
                     stop, target = entry*(1-STOP_PCT), entry*(1+TARGET_PCT)
@@ -296,7 +335,7 @@ def main(now=None):
                     reserved = sum(p["entry_usd"]*p["qty"]/USD_PER_GBP
                                    for p in state["positions"].values())
                     available = max(0, state["cash_gbp"]-reserved)
-                    qty = round(max(0, min(risk_qty, available*USD_PER_GBP/entry)), 5)
+                    qty = round(max(0, min(risk_qty, min(available, MAX_POSITION_GBP)*USD_PER_GBP/entry)), 5)
                     if qty > 0:
                         state["positions"][ticker] = {"date": bar_time.isoformat(),
                             "entry_usd": entry, "stop_usd": round(stop, 4),
@@ -312,6 +351,9 @@ def main(now=None):
         except Exception as exc:
             report["outcomes"][ticker] = "provider_error"
             state["errors"][ticker] = str(exc)[:200]
+    entries_today, realized_today, _ = daily_limits(state, ny.date())
+    report["entries_today"] = entries_today
+    report["realized_pnl_today_gbp"] = realized_today
     state["scan_diagnostics"] = report
     history = state.get("scan_history", [])
     if not isinstance(history, list):
@@ -325,6 +367,11 @@ def main(now=None):
                       "Proxy fills at observed candle closes; no live broker execution.")
     state["assumptions"] = {"usd_per_gbp_fixed": USD_PER_GBP, "max_risk_gbp": RISK_GBP,
                             "stop_pct": STOP_PCT*100, "target_pct": TARGET_PCT*100,
+                            "max_position_gbp": MAX_POSITION_GBP,
+                            "max_open_positions": MAX_OPEN_POSITIONS,
+                            "max_daily_entries": MAX_DAILY_ENTRIES,
+                            "daily_loss_limit_gbp": DAILY_LOSS_LIMIT_GBP,
+                            "breakout_bars": 15, "min_breakout_volume_multiple": 1.35,
                             "round_trip_cost_pct": 0.2}
     state["events"] = state["events"][-40:]
     state["trades"] = state["trades"][-500:]
