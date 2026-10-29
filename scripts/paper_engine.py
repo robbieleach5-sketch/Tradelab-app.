@@ -387,7 +387,7 @@ def main(now=None):
                                        "source": "Twelve Data 5-minute bars (LSE live entitlement)" if market == "UK"
                                                  else "Twelve Data 5-minute bars (limited-venue US feed)"}
             # Never trade old candles or repeat a previously processed candle.
-            if local_bar.date() != today_local or (now - bar_time) > timedelta(minutes=25):
+            if local_bar.date() != today_local or not timedelta(0) <= (now - bar_time) <= timedelta(minutes=25):
                 report["outcomes"][ticker] = "stale_or_outside_session"
                 state["errors"].pop(ticker, None)
                 continue
@@ -399,7 +399,7 @@ def main(now=None):
             if position:
                 closed = settle_open_position(state, ticker, completed)
                 report["outcomes"][ticker] = "position_closed" if closed else "position_monitored"
-            elif not (uk_active and (uk.hour, uk.minute) < (16, 15)) if market == "UK" else not allow_entry:
+            elif not ((uk_active and (uk.hour, uk.minute) < (16, 15)) if market == "UK" else allow_entry):
                 report["outcomes"][ticker] = "new_entries_closed"
             else:
                 eligible, reason = assess_breakout(completed)
