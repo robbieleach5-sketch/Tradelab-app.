@@ -267,6 +267,11 @@ class TestOptionalUKMarket(unittest.TestCase):
             bars = paper_engine.intraday_prices("SHEL", market="UK")
         self.assertEqual(bars[0]["close"], 10.02)
         self.assertEqual(bars[0]["volume"], 1100)
+        # GBp (mixed-case pence) must not be mistaken for GBP pounds.
+        pence = dict(base, meta=dict(base["meta"], currency="GBp"))
+        with patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock"}), \
+             patch.object(paper_engine.urllib.request, "urlopen", return_value=Response(pence)):
+            self.assertEqual(paper_engine.intraday_prices("SHEL", market="UK")[0]["close"], 10.02)
         for meta in ({"mic_code": "XNAS", "currency": "GBP"},
                      {"mic_code": "XLON", "currency": "USD"}, {}):
             bad = dict(base, meta=meta)
