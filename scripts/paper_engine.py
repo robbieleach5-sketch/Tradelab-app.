@@ -67,6 +67,13 @@ FOCUS_SYMBOLS = (
 # is explicitly enabled. Twelve Data Basic does NOT offer live UK coverage.
 UK_FOCUS_SYMBOLS = ("SHEL", "AZN", "HSBA", "ULVR", "BARC", "LLOY", "VOD", "BP.")
 UK_CANDIDATES_PER_SCAN = 5
+FOREX_SYMBOLS = ("GBP/USD", "EUR/USD")
+FOREX_CANDIDATES_PER_SCAN = 2
+FX_STOP_PCT = 0.0015
+FX_TARGET_PCT = 0.0025
+# Indicative FX mid prices are not executable; approximate round-trip spreads,
+# slippage and fees via a 0.04% notional cost. No FX leverage is simulated.
+FX_ROUND_TRIP_COST_RATE = 0.0004
 CANDIDATES_PER_SCAN = 5
 MAX_API_SYMBOLS_PER_SCAN = 8
 MAX_OPEN_POSITIONS = 4
@@ -103,9 +110,9 @@ def intraday_prices(ticker, market="US"):
     key = os.environ.get("TWELVE_DATA_API_KEY")
     if not key:
         raise RuntimeError("Missing GitHub Actions secret TWELVE_DATA_API_KEY")
-    if market not in ("US", "UK"):
+    if market not in ("US", "UK", "FX"):
         raise ValueError("Unsupported exchange")
-    tz_name = "Europe/London" if market == "UK" else "America/New_York"
+    tz_name = "Europe/London" if market == "UK" else "UTC" if market == "FX" else "America/New_York"
     params = {"symbol": ticker, "interval": "5min",
               "outputsize": 90, "timezone": tz_name}
     if market == "UK":
@@ -118,6 +125,10 @@ def intraday_prices(ticker, market="US"):
     if payload.get("status") == "error" or "values" not in payload:
         raise ValueError("Twelve Data: " + str(payload.get("message", "No bars returned"))[:130])
     multiplier = 1.0
+    if market == "FX":
+        provider_symbol = str((payload.get("meta") or {}).get("symbol") or "")
+        if provider_symbol and provider_symbol.upper() != ticker.upper():
+            raise ValueError("Forex provider returned a different currency pair")
     if market == "UK":
         meta = payload.get("meta") or {}
         venue = str(meta.get("exchange") or "").lower()
@@ -157,33 +168,38 @@ def selected_uk_candidates(now, positions):
     ][:UK_CANDIDATES_PER_SCAN]
 
 
-def select_active_watchlist(now, positions, us_active, uk_active):
-    """Monitor every active open position first; 8 API credits max in total."""
+def select_active_watchlist(now, positions, us_active, uk_active, fx_active=False):
+    """Prioritize open positions, then rotate candidates within eight API credits.
+
+    FX and US/UK equities are allocated slots fairly when their sessions overlap.
+    """
     opened = [
         ticker for ticker, pos in positions.items()
-        if (pos.get("currency", "USD") == "GBP" and uk_active)
-        or (pos.get("currency", "USD") != "GBP" and us_active)
+        if (ticker in FOREX_SYMBOLS and fx_active)
+        or (ticker in UK_FOCUS_SYMBOLS and uk_active)
+        or (ticker not in FOREX_SYMBOLS and ticker not in UK_FOCUS_SYMBOLS and us_active)
     ]
     if len(opened) >= MAX_API_SYMBOLS_PER_SCAN:
         return opened[:MAX_API_SYMBOLS_PER_SCAN]
     remaining = MAX_API_SYMBOLS_PER_SCAN - len(opened)
-    us_open = {k: v for k, v in positions.items() if v.get("currency", "USD") != "GBP"}
+    us_open = {k: v for k, v in positions.items()
+               if k not in FOREX_SYMBOLS and k not in UK_FOCUS_SYMBOLS}
     us_candidates = [
         ticker for ticker in selected_watchlist(now, us_open)
         if ticker not in positions
     ] if us_active else []
     uk_candidates = selected_uk_candidates(now, positions) if uk_active else []
-    if us_active and uk_active:
-        # Share discovery across both exchanges; prioritize existing US coverage
-        # if one venue has no remaining candidates.
-        chosen = uk_candidates[:min(2, remaining)]
-        chosen += us_candidates[:max(0, remaining - len(chosen))]
-        if len(chosen) < remaining:
-            chosen += [s for s in uk_candidates if s not in chosen][:remaining-len(chosen)]
-    elif uk_active:
-        chosen = uk_candidates[:min(UK_CANDIDATES_PER_SCAN, remaining)]
-    else:
-        chosen = us_candidates[:min(CANDIDATES_PER_SCAN, remaining)]
+    fx_candidates = [s for s in FOREX_SYMBOLS if s not in positions] if fx_active else []
+    # Monitor every FX pair when possible. Spare credits support other exchanges.
+    chosen = fx_candidates[:min(FOREX_CANDIDATES_PER_SCAN, remaining)]
+    for candidate_list, cap in ((uk_candidates, 2 if us_active else UK_CANDIDATES_PER_SCAN),
+                                 (us_candidates, CANDIDATES_PER_SCAN),
+                                 (uk_candidates, UK_CANDIDATES_PER_SCAN)):
+        for symbol in candidate_list[:cap]:
+            if len(chosen) >= remaining:
+                break
+            if symbol not in chosen:
+                chosen.append(symbol)
     return opened + chosen[:remaining]
 
 
@@ -234,6 +250,28 @@ def assess_breakout(completed):
     return True, "qualified_breakout"
 
 
+def assess_forex_breakout(completed):
+    """Exploratory FX momentum breakout without fabricated spot-FX volume."""
+    previous = completed[:-1]
+    if len(previous) < 50:
+        return False, "fx_insufficient_history"
+    bar = completed[-1]
+    mean20 = sum(x["close"] for x in previous[-20:]) / 20
+    mean50 = sum(x["close"] for x in previous[-50:]) / 50
+    level = max(x["high"] for x in previous[-12:])
+    if not (mean20 > mean50 and bar["close"] > mean20):
+        return False, "fx_trend_not_confirmed"
+    if bar["close"] <= level:
+        return False, "fx_no_breakout"
+    if bar["close"] > level * 1.0015:
+        return False, "fx_chase_filter"
+    # Ignore flat/inactive markets; volume is not reliably available for spot FX.
+    mean_range = sum((x["high"] - x["low"]) / x["close"] for x in previous[-10:]) / 10
+    if mean_range < 0.00015:
+        return False, "fx_low_volatility"
+    return True, "qualified_fx_breakout"
+
+
 def settle_open_position(state, ticker, completed):
     """Settle the FIRST stop/target touch across ALL newly observed 5m bars.
 
@@ -273,8 +311,12 @@ def settle_open_position(state, ticker, completed):
 
         conversion = 1.0 if position.get("currency") == "GBP" else USD_PER_GBP
         pnl = (exit_price - position["entry_usd"]) * position["qty"] / conversion
-        costs = (exit_price + position["entry_usd"]) * position["qty"] / conversion * 0.001
-        if position.get("currency") == "GBP":
+        if position.get("asset_class") == "forex":
+            # The quote is a mid, not an executable bid/ask; penalize round trip.
+            costs = position["entry_usd"] * position["qty"] / conversion * FX_ROUND_TRIP_COST_RATE
+        else:
+            costs = (exit_price + position["entry_usd"]) * position["qty"] / conversion * 0.001
+        if position.get("currency") == "GBP" and position.get("asset_class") != "forex":
             # Conservative approximation of UK share stamp duty on purchases.
             costs += position["entry_usd"] * position["qty"] * 0.005
         pnl = round(pnl - costs, 2)
@@ -285,6 +327,8 @@ def settle_open_position(state, ticker, completed):
             "exit_date": exit_time, "entry_usd": position["entry_usd"],
             "exit_usd": exit_price, "qty": position["qty"],
             "pnl_gbp": pnl, "reason": reason,
+            "currency": position.get("currency", "USD"),
+            "asset_class": position.get("asset_class", "equity"),
         })
         del state["positions"][ticker]
         state["events"].append(exit_time + " " + ticker + " closed " + reason)
@@ -331,6 +375,9 @@ def main(now=None):
     uk_hours = uk.weekday() < 5 and (8, 5) <= (uk.hour, uk.minute) < (16, 30)
     uk_enabled = os.environ.get("TRADELAB_UK_INTRADAY_ENABLED", "").lower() == "true"
     uk_active = uk_hours and uk_enabled
+    # Default-on for free Twelve Data Basic forex; separate opt-out available.
+    fx_enabled = os.environ.get("TRADELAB_FX_ENABLED", "").lower() not in ("false", "0", "off")
+    fx_active = fx_enabled and uk.weekday() < 5 and (8, 5) <= (uk.hour, uk.minute) < (21, 0)
     allow_entry = regular and (ny.hour, ny.minute) < (15, 45)
     state = load_state()
     for key, default in (("last_processed_intraday", {}), ("errors", {}), ("quotes", {}),
@@ -350,13 +397,14 @@ def main(now=None):
                                "outside_uk_session")
     # Standby until at least one eligible exchange opens. The default UK
     # status heartbeat does NOT make paid UK requests using a Basic plan.
-    if not regular and not uk_active:
+    if not regular and not uk_active and not fx_active:
         state["updated_utc"] = now.isoformat()
         state["run_event"] = os.environ.get("TRADELAB_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME", "local")
         state["run_id"] = os.environ.get("GITHUB_RUN_ID", "")
         state["market_session_open"] = False
         state["us_market_session_open"] = False
         state["uk_market_session_open"] = False
+        state["forex_session_open"] = False
         state["model"] = ("TradeLab paper simulator on standby. US shares require the US open; "
                           "UK entries require an explicitly enabled licensed live UK feed.")
         STATE.parent.mkdir(parents=True, exist_ok=True)
@@ -365,26 +413,31 @@ def main(now=None):
         return
     # UK and US share one eight-credit request budget and the same virtual cash.
     # The separate UK session is opt-in until an intraday LSE entitlement exists.
-    watchlist = select_active_watchlist(now, state["positions"], regular, uk_active)
-    report = {"utc": now.isoformat(), "universe_size": len(FOCUS_SYMBOLS) + (len(UK_FOCUS_SYMBOLS) if uk_active else 0),
-              "us_market_hours": regular, "uk_market_hours": uk_hours,
+    watchlist = select_active_watchlist(now, state["positions"], regular, uk_active, fx_active)
+    # UK names stay visible for research, never trading via unlicensed/delayed sources.
+    state["uk_research_watchlist"] = list(UK_FOCUS_SYMBOLS)
+    state["uk_research_status"] = "watchlist_only_no_verified_free_live_intraday_feed"
+    report = {"utc": now.isoformat(), "universe_size": len(FOCUS_SYMBOLS) + (len(UK_FOCUS_SYMBOLS) if uk_active else 0) + (len(FOREX_SYMBOLS) if fx_active else 0),
+              "us_market_hours": regular, "uk_market_hours": uk_hours, "forex_market_hours": fx_active,
               "uk_feed_status": state["uk_feed_status"],
               "checked": list(watchlist), "outcomes": {}, "new_paper_entries": []}
     for ticker in watchlist:
         try:
-            market = "UK" if ticker in UK_FOCUS_SYMBOLS else "US"
-            rows = intraday_prices(ticker, market="UK") if market == "UK" else intraday_prices(ticker)
+            market = "FX" if ticker in FOREX_SYMBOLS else "UK" if ticker in UK_FOCUS_SYMBOLS else "US"
+            rows = intraday_prices(ticker, market=market) if market != "US" else intraday_prices(ticker)
             # Only fully completed candles; provider may include an unfinished current candle.
             completed = [b for b in rows if b["timestamp"] + 300 <= int(now.timestamp()) - 30]
             if not completed:
                 raise ValueError("No completed 5-minute candles")
             bar = completed[-1]
             bar_time = datetime.fromtimestamp(bar["timestamp"], timezone.utc)
-            local_bar = bar_time.astimezone(ZoneInfo("Europe/London") if market == "UK" else ZoneInfo("America/New_York"))
-            today_local = uk.date() if market == "UK" else ny.date()
-            state["quotes"][ticker] = {"date": bar_time.isoformat(), "close_usd": round(bar["close"], 4),
+            local_bar = bar_time.astimezone(ZoneInfo("Europe/London") if market in ("UK", "FX") else ZoneInfo("America/New_York"))
+            today_local = uk.date() if market in ("UK", "FX") else ny.date()
+            state["quotes"][ticker] = {"date": bar_time.isoformat(), "close_usd": round(bar["close"], 6 if market == "FX" else 4),
                                        "currency": "GBP" if market == "UK" else "USD",
-                                       "source": "Twelve Data 5-minute bars (LSE live entitlement)" if market == "UK"
+                                       "asset_class": "forex" if market == "FX" else "equity",
+                                       "source": "Twelve Data 5-minute forex (indicative mid)" if market == "FX"
+                                                 else "Twelve Data 5-minute bars (LSE live entitlement)" if market == "UK"
                                                  else "Twelve Data 5-minute bars (limited-venue US feed)"}
             # Never trade old candles or repeat a previously processed candle.
             if local_bar.date() != today_local or not timedelta(0) <= (now - bar_time) <= timedelta(minutes=25):
@@ -399,10 +452,12 @@ def main(now=None):
             if position:
                 closed = settle_open_position(state, ticker, completed)
                 report["outcomes"][ticker] = "position_closed" if closed else "position_monitored"
-            elif not ((uk_active and (uk.hour, uk.minute) < (16, 15)) if market == "UK" else allow_entry):
+            elif not ((uk_active and (uk.hour, uk.minute) < (16, 15)) if market == "UK" else
+                      (fx_active and (uk.hour, uk.minute) < (20, 45)) if market == "FX" else allow_entry):
                 report["outcomes"][ticker] = "new_entries_closed"
             else:
-                eligible, reason = assess_breakout(completed)
+                eligible, reason = (assess_forex_breakout(completed) if market == "FX"
+                                    else assess_breakout(completed))
                 # Re-check limits after every entry/exit in this scan.
                 entries_today, realized_today, traded_today = daily_limits(state, ny.date())
                 if eligible and len(state["positions"]) >= MAX_OPEN_POSITIONS:
@@ -415,7 +470,9 @@ def main(now=None):
                     reason = "already_traded_this_session"
                 elif eligible:
                     entry = bar["close"]
-                    stop, target = entry*(1-STOP_PCT), entry*(1+TARGET_PCT)
+                    stop_pct = FX_STOP_PCT if market == "FX" else STOP_PCT
+                    target_pct = FX_TARGET_PCT if market == "FX" else TARGET_PCT
+                    stop, target = entry*(1-stop_pct), entry*(1+target_pct)
                     fx = 1.0 if market == "UK" else USD_PER_GBP
                     risk_qty = RISK_GBP * fx / (entry-stop)
                     reserved = sum(
@@ -425,9 +482,10 @@ def main(now=None):
                     qty = round(max(0, min(risk_qty, min(available, MAX_POSITION_GBP)*fx/entry)), 5)
                     if qty > 0:
                         state["positions"][ticker] = {"date": bar_time.isoformat(),
-                            "entry_usd": entry, "stop_usd": round(stop, 4),
-                            "target_usd": round(target, 4), "qty": qty,
-                            "currency": "GBP" if market == "UK" else "USD"}
+                            "entry_usd": entry, "stop_usd": round(stop, 5 if market == "FX" else 4),
+                            "target_usd": round(target, 5 if market == "FX" else 4), "qty": qty,
+                            "currency": "GBP" if market == "UK" else "USD",
+                            "asset_class": "forex" if market == "FX" else "equity"}
                         state["events"].append(bar_time.isoformat()+" "+ticker+" opened virtual long (5m)")
                         report["new_paper_entries"].append(ticker)
                         reason = "paper_entry_opened"
@@ -450,11 +508,12 @@ def main(now=None):
     state["updated_utc"] = now.isoformat()
     state["run_event"] = os.environ.get("TRADELAB_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME", "local")
     state["run_id"] = os.environ.get("GITHUB_RUN_ID", "")
-    state["market_session_open"] = regular or uk_active
+    state["market_session_open"] = regular or uk_active or fx_active
     state["us_market_session_open"] = regular
     state["uk_market_session_open"] = uk_active
+    state["forex_session_open"] = fx_active
     state["model"] = ("Educational intraday 5-minute paper simulator; Twelve Data US limited-venue feed "
-                      "and optional licensed UK intraday feed. Proxy fills at observed candle closes; "
+                      "and optional licensed UK intraday feed, plus indicative forex mid prices. Proxy fills at observed candle closes; "
                       "no live broker execution.")
     state["assumptions"] = {"usd_per_gbp_fixed": USD_PER_GBP, "max_risk_gbp": RISK_GBP,
                             "stop_pct": STOP_PCT*100, "target_pct": TARGET_PCT*100,
@@ -465,7 +524,11 @@ def main(now=None):
                             "breakout_bars": 15, "min_breakout_volume_multiple": 1.35,
                             "round_trip_cost_pct": 0.2,
                             "uk_share_purchase_stamp_duty_pct": 0.5,
-                            "uk_intraday_enabled": uk_enabled}
+                            "uk_intraday_enabled": uk_enabled,
+                            "forex_enabled": fx_enabled,
+                            "forex_stop_pct": FX_STOP_PCT*100,
+                            "forex_target_pct": FX_TARGET_PCT*100,
+                            "forex_cost_rate_pct": FX_ROUND_TRIP_COST_RATE*100}
     state["events"] = state["events"][-40:]
     state["trades"] = state["trades"][-500:]
     STATE.parent.mkdir(parents=True, exist_ok=True)

@@ -38,7 +38,7 @@ jobs:
           uk = utc.astimezone(ZoneInfo('Europe/London'))
           ny = utc.astimezone(ZoneInfo('America/New_York'))
           market = ny.weekday() < 5 and time(9, 35) <= ny.time() < time(16, 0)
-          window = uk.weekday() < 5 and uk.time() >= time(8, 0) and ny.time() < time(16, 0)
+          window = uk.weekday() < 5 and time(8, 0) <= uk.time() < time(21, 0)
           # Manual and code-change runs verify the pipeline, even after hours.
           # The engine allows LSE entries only with opted-in live UK data.
           event = os.environ.get('GITHUB_EVENT_NAME', '')
@@ -93,6 +93,7 @@ jobs:
         env:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
           TRADELAB_UK_INTRADAY_ENABLED: ${{ vars.TRADELAB_UK_INTRADAY_ENABLED }}
+          TRADELAB_FX_ENABLED: ${{ vars.TRADELAB_FX_ENABLED }}
           TRADELAB_TRIGGER: ${{ inputs.origin }}
         run: python scripts/paper_engine.py
       - name: Save simulated portfolio snapshot
@@ -149,7 +150,7 @@ jobs:
                   except (TypeError, ValueError, KeyError):
                       pass
               if not recent:
-                  sys.exit('Scanner health failure: no fresh intraday stock prices')
+                  sys.exit('Scanner health failure: no fresh intraday prices')
               print('Market scan verified; recent quotes:', ', '.join(recent))
           else:
               print('Standby verified: no active licensed market feed requested')
