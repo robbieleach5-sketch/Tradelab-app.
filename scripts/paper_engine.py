@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Alpaca IEX intraday educational paper engine. No broker orders."""
 import json, os, urllib.request, urllib.parse
+from scripts import cfd_proxy_paper
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -88,6 +89,9 @@ RISK_GBP = 5.0
 START_GBP = 1000.0
 STOP_PCT = 0.01
 TARGET_PCT = 0.015
+# Early cash-out on a fresh completed 5-minute equity candle (+0.6% gross).
+# Protective stop or original target always gets priority if touched first.
+EQUITY_PROFIT_BANK_PCT = 0.006
 # Fixed conversion assumption, NOT a live FX rate.
 USD_PER_GBP = 1.33
 
@@ -171,7 +175,7 @@ def selected_uk_candidates(now, positions):
     ][:UK_CANDIDATES_PER_SCAN]
 
 
-def select_active_watchlist(now, positions, us_active, uk_active, fx_active=False):
+def select_active_watchlist(now, positions, us_active, uk_active, fx_active=False, scan_state=None):
     """Prioritize open positions, then rotate candidates within eight API credits.
 
     FX and US/UK equities are allocated slots fairly when their sessions overlap.
@@ -193,9 +197,16 @@ def select_active_watchlist(now, positions, us_active, uk_active, fx_active=Fals
     ] if us_active else []
     uk_candidates = selected_uk_candidates(now, positions) if uk_active else []
     fx_candidates = [s for s in FOREX_SYMBOLS if s not in positions] if fx_active else []
+    cfd = (scan_state or {}).get("cfd_paper", {})
+    cfd_watch = list(cfd.get("positions", {})) + [
+        symbol for symbol in cfd_proxy_paper.PROXY_SYMBOLS
+        if symbol not in cfd.get("positions", {})
+    ]
+    us_priority = [symbol for symbol in cfd_watch if symbol not in positions] if us_active else []
     # Monitor every FX pair when possible. Spare credits support other exchanges.
     chosen = fx_candidates[:min(FOREX_CANDIDATES_PER_SCAN, remaining)]
-    for candidate_list, cap in ((uk_candidates, 2 if us_active else UK_CANDIDATES_PER_SCAN),
+    for candidate_list, cap in ((us_priority, 2),
+                                 (uk_candidates, 2 if us_active else UK_CANDIDATES_PER_SCAN),
                                  (us_candidates, CANDIDATES_PER_SCAN),
                                  (uk_candidates, UK_CANDIDATES_PER_SCAN)):
         for symbol in candidate_list[:cap]:
@@ -302,15 +313,21 @@ def settle_open_position(state, ticker, completed):
         stop_hit = candle["low"] <= position["stop_usd"]
         target_hit = candle["high"] >= position["target_usd"]
         if not stop_hit and not target_hit:
-            continue
-
-        # If both touched, assume stop first. Account for adverse open gaps.
-        reason = "stop" if stop_hit else "target"
-        exit_price = position["stop_usd"] if stop_hit else position["target_usd"]
-        if candle["open"] < position["stop_usd"]:
-            exit_price, reason = candle["open"], "gap below stop"
-        elif candle["open"] > position["target_usd"]:
-            exit_price, reason = candle["open"], "gap above target"
+            # Bank small, confirmed equity profits instead of holding for
+            # distant targets; never use this for spot forex positions.
+            if position.get("asset_class", "equity") != "equity":
+                continue
+            if candle["close"] < position["entry_usd"] * (1 + EQUITY_PROFIT_BANK_PCT):
+                continue
+            exit_price, reason = candle["close"], "early_profit_bank"
+        else:
+            # If both touched, assume stop first. Account for adverse open gaps.
+            reason = "stop" if stop_hit else "target"
+            exit_price = position["stop_usd"] if stop_hit else position["target_usd"]
+            if candle["open"] < position["stop_usd"]:
+                exit_price, reason = candle["open"], "gap below stop"
+            elif candle["open"] > position["target_usd"]:
+                exit_price, reason = candle["open"], "gap above target"
 
         conversion = 1.0 if position.get("currency") == "GBP" else USD_PER_GBP
         pnl = (exit_price - position["entry_usd"]) * position["qty"] / conversion
@@ -456,6 +473,7 @@ def main(now=None):
     for key, default in (("last_processed_intraday", {}), ("errors", {}), ("quotes", {}),
                          ("events", []), ("positions", {}), ("trades", [])):
         state.setdefault(key, default)
+    cfd_book = cfd_proxy_paper.initialize(state)
     if not os.environ.get("TWELVE_DATA_API_KEY"):
         state["errors"]["DATA_CONFIG"] = "Missing GitHub Actions secret TWELVE_DATA_API_KEY"
         state["updated_utc"] = now.isoformat()
@@ -487,14 +505,15 @@ def main(now=None):
         return
     # UK and US share one eight-credit request budget and the same virtual cash.
     # The separate UK session is opt-in until an intraday LSE entitlement exists.
-    watchlist = select_active_watchlist(now, state["positions"], regular, uk_active, fx_active)
+    watchlist = select_active_watchlist(now, state["positions"], regular, uk_active, fx_active, state)
     # UK names stay visible for research, never trading via unlicensed/delayed sources.
     state["uk_research_watchlist"] = list(UK_FOCUS_SYMBOLS)
     state["uk_research_status"] = "watchlist_only_no_verified_free_live_intraday_feed"
     report = {"utc": now.isoformat(), "universe_size": len(FOCUS_SYMBOLS) + (len(UK_FOCUS_SYMBOLS) if uk_active else 0) + (len(FOREX_SYMBOLS) if fx_active else 0),
               "us_market_hours": regular, "uk_market_hours": uk_hours, "forex_market_hours": fx_active,
               "uk_feed_status": state["uk_feed_status"],
-              "checked": list(watchlist), "outcomes": {}, "new_paper_entries": []}
+              "checked": list(watchlist), "outcomes": {}, "new_paper_entries": [],
+              "cfd_proxy_outcomes": {}}
     for ticker in watchlist:
         try:
             market = "FX" if ticker in FOREX_SYMBOLS else "UK" if ticker in UK_FOCUS_SYMBOLS else "US"
@@ -573,6 +592,14 @@ def main(now=None):
                     else:
                         reason = "insufficient_unreserved_cash"
                 report["outcomes"][ticker] = reason
+            # Secondary, clearly labelled CFD-style demo ledger, never
+            # actual broker-CFD quotes or orders.
+            if market == "US" and ticker in cfd_proxy_paper.PROXY_SYMBOLS:
+                _, primary_realized, _ = daily_limits(state, ny.date())
+                cfd_allowed = primary_realized > -DAILY_LOSS_LIMIT_GBP
+                report["cfd_proxy_outcomes"][ticker] = cfd_proxy_paper.evaluate(
+                    cfd_book, ticker, completed, now, allow_new=cfd_allowed
+                )
             state["last_processed_intraday"][ticker] = bar["timestamp"]
             state["errors"].pop(ticker, None)
         except Exception as exc:
@@ -581,6 +608,9 @@ def main(now=None):
     entries_today, realized_today, _ = daily_limits(state, ny.date())
     report["entries_today"] = entries_today
     report["realized_pnl_today_gbp"] = realized_today
+    cfd_book["latest_scan_utc"] = now.isoformat()
+    report["cfd_proxy_balance_gbp"] = cfd_book["cash_gbp"]
+    report["cfd_proxy_open_positions"] = len(cfd_book["positions"])
     publish_risk_status(state, ny.date())
     state["scan_diagnostics"] = report
     history = state.get("scan_history", [])
@@ -609,6 +639,8 @@ def main(now=None):
                             "uk_share_purchase_stamp_duty_pct": 0.5,
                             "uk_intraday_enabled": uk_enabled,
                             "forex_enabled": fx_enabled,
+                            "equity_early_profit_bank_pct": EQUITY_PROFIT_BANK_PCT * 100,
+                            "cfd_proxy_isolated_demo": True,
                             "forex_stop_pct": FX_STOP_PCT*100,
                             "forex_target_pct": FX_TARGET_PCT*100,
                             "forex_cost_rate_pct": FX_ROUND_TRIP_COST_RATE*100}
