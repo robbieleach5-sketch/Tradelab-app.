@@ -147,5 +147,66 @@ class TestFocusedScanner(unittest.TestCase):
                          (False, "insufficient_history"))
 
 
+
+class TestSmallerWinsConfiguration(unittest.TestCase):
+    def test_smaller_targets_and_capital_per_trade(self):
+        self.assertEqual(paper_engine.STOP_PCT, 0.01)
+        self.assertEqual(paper_engine.TARGET_PCT, 0.015)
+        self.assertEqual(paper_engine.MAX_POSITION_GBP, 250.0)
+        self.assertEqual(paper_engine.MAX_OPEN_POSITIONS, 4)
+
+    def test_four_positions_still_respect_api_limit(self):
+        positions = {k: {} for k in ("NVDA", "TSLA", "CAT", "XOM")}
+        scan = paper_engine.selected_watchlist(BASE, positions)
+        self.assertEqual(scan[:4], list(positions))
+        self.assertEqual(len(scan), 8)
+        self.assertEqual(len(set(scan)), 8)
+
+    def test_volume_filter_is_moderately_more_permissive(self):
+        bars = TestFocusedScanner.rising_bars()
+        bars[-1]["volume"] = 140
+        self.assertEqual(paper_engine.assess_breakout(bars), (True, "qualified_breakout"))
+        bars[-1]["volume"] = 120
+        self.assertEqual(paper_engine.assess_breakout(bars), (False, "insufficient_breakout_volume"))
+
+    def test_daily_limits_count_entries_and_closed_losses(self):
+        from zoneinfo import ZoneInfo
+        day = datetime(2026, 10, 29, 15, tzinfo=timezone.utc).astimezone(ZoneInfo("America/New_York")).date()
+        state = {
+            "positions": {"NVDA": {"date": "2026-10-29T14:55:00+00:00"}},
+            "trades": [
+                {"ticker": "TSLA", "entry_date": "2026-10-29T14:00:00+00:00",
+                 "exit_date": "2026-10-29T14:30:00+00:00", "pnl_gbp": -3.1},
+                {"ticker": "CAT", "entry_date": "2026-10-28T19:00:00+00:00",
+                 "exit_date": "2026-10-29T15:00:00+00:00", "pnl_gbp": -5.2},
+            ],
+        }
+        count, realized, tickers = paper_engine.daily_limits(state, day)
+        self.assertEqual(count, 2)
+        self.assertEqual(realized, -8.3)
+        self.assertEqual(tickers, {"TSLA", "NVDA"})
+
+    def test_new_entries_cap_250_gbp_each(self):
+        now = datetime(2026, 10, 29, 15, tzinfo=timezone.utc)
+        stamp = int((now - timedelta(minutes=10)).timestamp())
+        bars = [{"timestamp": stamp, "close": 100.0, "open": 100.0,
+                 "low": 99.0, "high": 101.0, "volume": 200}]
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "paper_state.json"
+            with patch.object(paper_engine, "STATE", path), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "fake-key"}), \
+                 patch.object(paper_engine, "selected_watchlist", return_value=["NVDA", "TSLA"]), \
+                 patch.object(paper_engine, "intraday_prices", return_value=bars), \
+                 patch.object(paper_engine, "assess_breakout", return_value=(True, "qualified_breakout")):
+                paper_engine.main(now=now)
+            state = json.loads(path.read_text())
+            self.assertEqual(set(state["positions"]), {"NVDA", "TSLA"})
+            for position in state["positions"].values():
+                self.assertLessEqual(
+                    position["entry_usd"] * position["qty"] / paper_engine.USD_PER_GBP, 250.01
+                )
+                self.assertAlmostEqual(position["target_usd"] / position["entry_usd"], 1.015, places=4)
+
+
 if __name__ == "__main__":
     unittest.main()
