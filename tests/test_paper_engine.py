@@ -392,5 +392,56 @@ class TestFreeForexMarket(unittest.TestCase):
         self.assertEqual(len(selected), len(set(selected)))
         self.assertEqual(selected[:3], ["XOM", "CAT", "GBP/USD"])
 
+
+class TestLegacyPositionRebalance(unittest.TestCase):
+    def make_state(self):
+        state = portfolio()
+        state["positions"]["TEST"]["qty"] = 6.65
+        state["positions"]["TEST"]["date"] = "2026-10-27T15:00:00+00:00"
+        return state
+
+    def test_reduce_only_at_fresh_completed_price_and_record_realized_pnl(self):
+        now = datetime(2026, 10, 29, 14, 0, tzinfo=timezone.utc)
+        bar = {"timestamp": int((now - timedelta(minutes=10)).timestamp()),
+               "open": 99.0, "high": 100.4, "low": 98.9, "close": 99.7}
+        state = self.make_state()
+        original = state["positions"]["TEST"].copy()
+        self.assertTrue(paper_engine.rebalance_legacy_position(state, "TEST", [bar], now))
+        new_pos = state["positions"]["TEST"]
+        self.assertEqual(new_pos["target_usd"], original["target_usd"])
+        self.assertEqual(new_pos["stop_usd"], original["stop_usd"])
+        self.assertLessEqual(new_pos["qty"]*new_pos["entry_usd"]/USD_PER_GBP, 200.01)
+        sale_qty = state["trades"][-1]["qty"]
+        expected = (99.7 - original["entry_usd"]) * sale_qty / USD_PER_GBP
+        expected -= (99.7 + original["entry_usd"]) * sale_qty / USD_PER_GBP * 0.001
+        self.assertEqual(state["trades"][-1]["pnl_gbp"], round(expected, 2))
+        self.assertEqual(state["cash_gbp"], round(1000+round(expected, 2), 2))
+        self.assertFalse(paper_engine.rebalance_legacy_position(state, "TEST", [bar], now))
+        self.assertEqual(len(state["trades"]), 1)
+
+    def test_no_legacy_trim_without_fresh_quote_or_for_new_positions(self):
+        now = datetime(2026, 10, 29, 14, 0, tzinfo=timezone.utc)
+        state = self.make_state()
+        older = {"timestamp": int((now - timedelta(days=1)).timestamp()),
+                 "close": 99.1}
+        self.assertFalse(paper_engine.rebalance_legacy_position(state, "TEST", [older], now))
+        self.assertEqual(state["cash_gbp"], 1000)
+        self.assertEqual(state["positions"]["TEST"]["qty"], 6.65)
+        fresh = {"timestamp": int((now - timedelta(minutes=10)).timestamp()),
+                 "close": 99.1}
+        state["positions"]["TEST"]["asset_class"] = "forex"
+        self.assertFalse(paper_engine.rebalance_legacy_position(state, "TEST", [fresh], now))
+        state["positions"]["TEST"]["asset_class"] = "equity"
+        state["positions"]["TEST"]["currency"] = "GBP"
+        self.assertFalse(paper_engine.rebalance_legacy_position(state, "TEST", [fresh], now))
+
+    def test_current_legacy_portfolio_frees_at_least_500_virtual_pounds(self):
+        from scripts.paper_engine import LEGACY_POSITION_CAP_GBP
+        positions = {"XOM": {"entry_usd": 181.86000061035156, "qty": 3.65666},
+                     "CAT": {"entry_usd": 709.485, "qty": 0.91623}}
+        remaining = sum(LEGACY_POSITION_CAP_GBP for _ in positions)
+        self.assertLessEqual(remaining, 400)
+        self.assertGreater(988.76 - remaining, 500)
+
 if __name__ == "__main__":
     unittest.main()
