@@ -125,6 +125,10 @@ def intraday_prices(ticker, market="US"):
     if payload.get("status") == "error" or "values" not in payload:
         raise ValueError("Twelve Data: " + str(payload.get("message", "No bars returned"))[:130])
     multiplier = 1.0
+    if market == "FX":
+        provider_symbol = str((payload.get("meta") or {}).get("symbol") or "")
+        if provider_symbol and provider_symbol.upper() != ticker.upper():
+            raise ValueError("Forex provider returned a different currency pair")
     if market == "UK":
         meta = payload.get("meta") or {}
         venue = str(meta.get("exchange") or "").lower()
@@ -478,8 +482,8 @@ def main(now=None):
                     qty = round(max(0, min(risk_qty, min(available, MAX_POSITION_GBP)*fx/entry)), 5)
                     if qty > 0:
                         state["positions"][ticker] = {"date": bar_time.isoformat(),
-                            "entry_usd": entry, "stop_usd": round(stop, 4),
-                            "target_usd": round(target, 4), "qty": qty,
+                            "entry_usd": entry, "stop_usd": round(stop, 5 if market == "FX" else 4),
+                            "target_usd": round(target, 5 if market == "FX" else 4), "qty": qty,
                             "currency": "GBP" if market == "UK" else "USD",
                             "asset_class": "forex" if market == "FX" else "equity"}
                         state["events"].append(bar_time.isoformat()+" "+ticker+" opened virtual long (5m)")
