@@ -443,5 +443,36 @@ class TestLegacyPositionRebalance(unittest.TestCase):
         self.assertLessEqual(remaining, 400)
         self.assertGreater(988.76 - remaining, 500)
 
+
+class TestRiskStatusDisplay(unittest.TestCase):
+    def test_daily_gap_loss_halts_new_entries_and_reports_cash(self):
+        now = datetime(2026, 10, 29, 14, 0, tzinfo=timezone.utc)
+        from zoneinfo import ZoneInfo
+        day = now.astimezone(ZoneInfo("America/New_York")).date()
+        state = {"cash_gbp": 937.62,
+                 "positions": {"XOM": {"entry_usd": 181.86000061035156, "qty": 3.65666}},
+                 "trades": [{"ticker": "CAT", "entry_date": "2026-10-27T14:55:00+00:00",
+                             "exit_date": "2026-10-29T13:30:00+00:00", "pnl_gbp": -51.14}]}
+        paper_engine.publish_risk_status(state, day)
+        risk = state["risk_status"]
+        self.assertTrue(risk["daily_loss_halt"])
+        self.assertEqual(risk["entry_pause_reason"], "daily_loss_limit")
+        self.assertAlmostEqual(risk["available_virtual_cash_gbp"], 437.62, places=2)
+        self.assertEqual(risk["entries_today"], 0)
+        self.assertEqual(risk["daily_realized_pnl_gbp"], -51.14)
+
+    def test_fresh_day_releases_loss_pause_without_fabricating_capital(self):
+        from zoneinfo import ZoneInfo
+        day = datetime(2026, 10, 30, 13, 40, tzinfo=timezone.utc).astimezone(
+            ZoneInfo("America/New_York")).date()
+        state = {"cash_gbp": 937.62, "positions": {}, "trades": [
+            {"ticker": "CAT", "entry_date": "2026-10-27T14:55:00+00:00",
+             "exit_date": "2026-10-29T13:30:00+00:00", "pnl_gbp": -51.14}
+        ]}
+        paper_engine.publish_risk_status(state, day)
+        self.assertFalse(state["risk_status"]["daily_loss_halt"])
+        self.assertEqual(state["risk_status"]["entry_pause_reason"], "none")
+        self.assertEqual(state["risk_status"]["available_virtual_cash_gbp"], 937.62)
+
 if __name__ == "__main__":
     unittest.main()
