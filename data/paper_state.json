@@ -436,16 +436,16 @@
       "is_fresh": false
     },
     "GBP/USD": {
-      "date": "2026-10-30T20:30:00+00:00",
-      "close_usd": 1.33972,
+      "date": "2026-10-30T20:45:00+00:00",
+      "close_usd": 1.33927,
       "currency": "USD",
       "asset_class": "forex",
       "source": "Twelve Data 5-minute forex (indicative mid)",
       "is_fresh": true
     },
     "EUR/USD": {
-      "date": "2026-10-30T20:30:00+00:00",
-      "close_usd": 1.11696,
+      "date": "2026-10-30T20:45:00+00:00",
+      "close_usd": 1.11654,
       "currency": "USD",
       "asset_class": "forex",
       "source": "Twelve Data 5-minute forex (indicative mid)",
@@ -461,7 +461,7 @@
     "2026-10-29T13:50:00+00:00 XOM reduced to free virtual capital",
     "2026-10-29T13:55:00+00:00 XOM closed early_profit_bank"
   ],
-  "updated_utc": "2026-10-30T20:36:52.522797+00:00",
+  "updated_utc": "2026-10-30T20:54:03.404341+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data US limited-venue feed and optional licensed UK intraday feed, plus indicative forex mid prices. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -535,14 +535,14 @@
     "UNH": 1793388900,
     "JNJ": 1793202300,
     "LLY": 1793202300,
-    "GBP/USD": 1793392200,
-    "EUR/USD": 1793392200
+    "GBP/USD": 1793393100,
+    "EUR/USD": 1793393100
   },
   "run_event": "watchdog",
-  "run_id": "41124614136",
+  "run_id": "41126826161",
   "market_session_open": true,
   "scan_diagnostics": {
-    "utc": "2026-10-30T20:36:52.522797+00:00",
+    "utc": "2026-10-30T20:54:03.404341+00:00",
     "universe_size": 18,
     "us_market_hours": false,
     "uk_market_hours": false,
@@ -553,8 +553,8 @@
       "EUR/USD"
     ],
     "outcomes": {
-      "GBP/USD": "fx_no_breakout",
-      "EUR/USD": "fx_no_breakout"
+      "GBP/USD": "new_entries_closed",
+      "EUR/USD": "new_entries_closed"
     },
     "new_paper_entries": [],
     "cfd_proxy_outcomes": {},
@@ -2706,6 +2706,33 @@
       "stale_or_unavailable_checked": [],
       "cfd_proxy_balance_gbp": 1001.15,
       "cfd_proxy_open_positions": 0
+    },
+    {
+      "utc": "2026-10-30T20:54:03.404341+00:00",
+      "universe_size": 18,
+      "us_market_hours": false,
+      "uk_market_hours": false,
+      "forex_market_hours": true,
+      "uk_feed_status": "outside_uk_session",
+      "checked": [
+        "GBP/USD",
+        "EUR/USD"
+      ],
+      "outcomes": {
+        "GBP/USD": "new_entries_closed",
+        "EUR/USD": "new_entries_closed"
+      },
+      "new_paper_entries": [],
+      "cfd_proxy_outcomes": {},
+      "entries_today": 0,
+      "realized_pnl_today_gbp": 0,
+      "fresh_checked": [
+        "GBP/USD",
+        "EUR/USD"
+      ],
+      "stale_or_unavailable_checked": [],
+      "cfd_proxy_balance_gbp": 1001.15,
+      "cfd_proxy_open_positions": 0
     }
   ],
   "uk_feed_status": "outside_uk_session",
@@ -2770,6 +2797,6 @@
     "execution": "SIMULATED_ONLY_NO_LEVERAGE_NO_BROKER_ORDERS",
     "separate_research_account": true,
     "starting_balance_gbp": 1000.0,
-    "latest_scan_utc": "2026-10-30T20:36:52.522797+00:00"
+    "latest_scan_utc": "2026-10-30T20:54:03.404341+00:00"
   }
 }
