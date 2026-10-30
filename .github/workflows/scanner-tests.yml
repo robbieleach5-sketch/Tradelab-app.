@@ -1,0 +1,32 @@
+name: Paper scanner regression tests
+
+on:
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/scanner-tests.yml"
+  push:
+    branches:
+      - main
+      - improve-paper-scanner-coverage-20261030
+    paths:
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/scanner-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run offline paper scanner tests (no market API or orders)
+        env:
+          TWELVE_DATA_API_KEY: ""
+        run: python -m unittest discover -s tests -p 'test_*.py' -v

@@ -110,6 +110,24 @@ def load_state():
             pass
     return {"cash_gbp": START_GBP, "positions": {}, "trades": [], "last_processed": {}}
 
+def mark_quote_freshness(quotes, now):
+    """Flag cached market prices as current only within the 25-minute bar window.
+
+    This flag describes the age of a quote, not an executable market price.
+    Old cached quotes stay in history but must not appear current in the app.
+    """
+    for quote in quotes.values():
+        try:
+            stamp = datetime.fromisoformat(quote["date"])
+            if stamp.tzinfo is None:
+                quote["is_fresh"] = False
+                continue
+            age = (now - stamp.astimezone(timezone.utc)).total_seconds()
+            quote["is_fresh"] = 0 <= age <= 25 * 60
+        except (TypeError, ValueError, KeyError, AttributeError):
+            quote["is_fresh"] = False
+
+
 def intraday_prices(ticker, market="US"):
     """Five-minute bars for US shares, or licensed LSE intraday UK shares.
 
@@ -196,23 +214,28 @@ def select_active_watchlist(now, positions, us_active, uk_active, fx_active=Fals
     remaining = MAX_API_SYMBOLS_PER_SCAN - len(opened)
     us_open = {k: v for k, v in positions.items()
                if k not in FOREX_SYMBOLS and k not in UK_FOCUS_SYMBOLS}
+    # Use spare credit capacity for a wider rotating US sample. The default
+    # selected_watchlist() behaviour remains unchanged for existing callers.
     us_candidates = [
-        ticker for ticker in selected_watchlist(now, us_open)
+        ticker for ticker in selected_watchlist(
+            now, us_open, candidate_limit=MAX_API_SYMBOLS_PER_SCAN)
         if ticker not in positions
     ] if us_active else []
     uk_candidates = selected_uk_candidates(now, positions) if uk_active else []
     fx_candidates = [s for s in FOREX_SYMBOLS if s not in positions] if fx_active else []
     cfd = (scan_state or {}).get("cfd_paper", {})
-    cfd_watch = list(cfd.get("positions", {})) + [
-        symbol for symbol in cfd_proxy_paper.PROXY_SYMBOLS
-        if symbol not in cfd.get("positions", {})
-    ]
-    us_priority = [symbol for symbol in cfd_watch if symbol not in positions] if us_active else []
+    # An OPEN isolated CFD proxy must be checked at every scan so its stop
+    # can be settled. Do not permanently pin unheld CFD symbols: they used
+    # to consume two slots on every scan, crowding out other candidates.
+    us_priority = [
+        symbol for symbol in cfd.get("positions", {})
+        if symbol in cfd_proxy_paper.PROXY_SYMBOLS and symbol not in positions
+    ] if us_active else []
     # Monitor every FX pair when possible. Spare credits support other exchanges.
     chosen = fx_candidates[:min(FOREX_CANDIDATES_PER_SCAN, remaining)]
-    for candidate_list, cap in ((us_priority, 2),
+    for candidate_list, cap in ((us_priority, MAX_API_SYMBOLS_PER_SCAN),
                                  (uk_candidates, 2 if us_active else UK_CANDIDATES_PER_SCAN),
-                                 (us_candidates, CANDIDATES_PER_SCAN),
+                                 (us_candidates, MAX_API_SYMBOLS_PER_SCAN),
                                  (uk_candidates, UK_CANDIDATES_PER_SCAN)):
         for symbol in candidate_list[:cap]:
             if len(chosen) >= remaining:
@@ -222,10 +245,11 @@ def select_active_watchlist(now, positions, us_active, uk_active, fx_active=Fals
     return opened + chosen[:remaining]
 
 
-def selected_watchlist(now, positions):
-    """Monitor up to four positions first, then rotate focused entry candidates.
+def selected_watchlist(now, positions, candidate_limit=CANDIDATES_PER_SCAN):
+    """Monitor open positions first, then rotate entry candidates.
 
-    Never exceed eight data calls per scan on the limited free API plan.
+    Normal callers get the usual five new names. Shared FX/US scheduling
+    may request enough candidates to fill unused API slots, never >8 total.
     """
     universe = FOCUS_SYMBOLS
     slot = int(now.timestamp() // 900)
@@ -236,7 +260,7 @@ def selected_watchlist(now, positions):
         ticker = universe[(start + step) % len(universe)]
         if ticker not in positions and ticker not in candidates:
             candidates.append(ticker)
-        if len(candidates) >= min(CANDIDATES_PER_SCAN, MAX_API_SYMBOLS_PER_SCAN - len(opened)):
+        if len(candidates) >= min(candidate_limit, MAX_API_SYMBOLS_PER_SCAN - len(opened)):
             break
     return opened + candidates
 
@@ -478,6 +502,7 @@ def main(now=None):
     for key, default in (("last_processed_intraday", {}), ("errors", {}), ("quotes", {}),
                          ("events", []), ("positions", {}), ("trades", [])):
         state.setdefault(key, default)
+    mark_quote_freshness(state["quotes"], now)
     cfd_book = cfd_proxy_paper.initialize(state)
     if not os.environ.get("TWELVE_DATA_API_KEY"):
         state["errors"]["DATA_CONFIG"] = "Missing GitHub Actions secret TWELVE_DATA_API_KEY"
@@ -537,6 +562,9 @@ def main(now=None):
                                        "source": "Twelve Data 5-minute forex (indicative mid)" if market == "FX"
                                                  else "Twelve Data 5-minute bars (LSE live entitlement)" if market == "UK"
                                                  else "Twelve Data 5-minute bars (limited-venue US feed)"}
+            state["quotes"][ticker]["is_fresh"] = (
+                local_bar.date() == today_local and
+                timedelta(0) <= now - bar_time <= timedelta(minutes=25))
             # Never trade old candles or repeat a previously processed candle.
             if local_bar.date() != today_local or not timedelta(0) <= (now - bar_time) <= timedelta(minutes=25):
                 report["outcomes"][ticker] = "stale_or_outside_session"
@@ -613,6 +641,14 @@ def main(now=None):
     entries_today, realized_today, _ = daily_limits(state, ny.date())
     report["entries_today"] = entries_today
     report["realized_pnl_today_gbp"] = realized_today
+    report["fresh_checked"] = [
+        symbol for symbol in watchlist
+        if state["quotes"].get(symbol, {}).get("is_fresh")
+        and report["outcomes"].get(symbol) != "provider_error"
+    ]
+    report["stale_or_unavailable_checked"] = [
+        symbol for symbol in watchlist if symbol not in report["fresh_checked"]
+    ]
     cfd_book["latest_scan_utc"] = now.isoformat()
     report["cfd_proxy_balance_gbp"] = cfd_book["cash_gbp"]
     report["cfd_proxy_open_positions"] = len(cfd_book["positions"])
