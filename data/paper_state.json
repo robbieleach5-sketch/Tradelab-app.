@@ -104,300 +104,352 @@
   "errors": {},
   "quotes": {
     "TSLA": {
-      "date": "2026-10-30T16:35:00+00:00",
-      "close_usd": 401.19,
+      "date": "2026-10-30T16:50:00+00:00",
+      "close_usd": 399.34,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": true
     },
     "NVDA": {
-      "date": "2026-10-30T16:35:00+00:00",
-      "close_usd": 204.795,
+      "date": "2026-10-30T16:50:00+00:00",
+      "close_usd": 203.7,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": true
     },
     "AAPL": {
       "date": "2026-10-30T16:15:00+00:00",
       "close_usd": 347.525,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "MSFT": {
-      "date": "2026-10-30T16:00:00+00:00",
-      "close_usd": 522.43,
+      "date": "2026-10-30T16:50:00+00:00",
+      "close_usd": 521.65,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": true
     },
     "AMZN": {
       "date": "2026-10-30T16:15:00+00:00",
       "close_usd": 239.12,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "GOOGL": {
       "date": "2026-10-28T16:40:00+00:00",
       "close_usd": 323.31,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "META": {
-      "date": "2026-10-30T16:00:00+00:00",
-      "close_usd": 622.15,
+      "date": "2026-10-30T16:50:00+00:00",
+      "close_usd": 620.82,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": true
     },
     "AVGO": {
       "date": "2026-10-30T16:15:00+00:00",
       "close_usd": 325.365,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "AMD": {
-      "date": "2026-10-30T16:00:00+00:00",
-      "close_usd": 507.1,
+      "date": "2026-10-30T16:50:00+00:00",
+      "close_usd": 500.27,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": true
     },
     "NFLX": {
       "date": "2026-10-28T16:40:00+00:00",
       "close_usd": 61.85,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "PLTR": {
       "date": "2026-10-30T16:15:00+00:00",
       "close_usd": 186.97,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "CRWD": {
       "date": "2026-10-30T16:35:00+00:00",
       "close_usd": 245.9,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": true
     },
     "NET": {
       "date": "2026-10-28T16:55:00+00:00",
       "close_usd": 321.02,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "ORCL": {
       "date": "2026-10-28T16:55:00+00:00",
       "close_usd": 130.69,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "CRM": {
       "date": "2026-10-28T16:55:00+00:00",
       "close_usd": 241.01,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "ADBE": {
       "date": "2026-10-28T14:50:00+00:00",
       "close_usd": 249.52,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "INTC": {
       "date": "2026-10-28T14:50:00+00:00",
       "close_usd": 93.46,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "MU": {
       "date": "2026-10-30T14:45:00+00:00",
       "close_usd": 896.7,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "QCOM": {
       "date": "2026-10-28T14:50:00+00:00",
       "close_usd": 182.35,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "TXN": {
       "date": "2026-10-28T14:50:00+00:00",
       "close_usd": 307.32,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "AMAT": {
       "date": "2026-10-27T19:00:00+00:00",
       "close_usd": 395.58,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "LRCX": {
       "date": "2026-10-27T19:00:00+00:00",
       "close_usd": 240.355,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "KLAC": {
       "date": "2026-10-27T19:00:00+00:00",
       "close_usd": 153.05,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "PANW": {
       "date": "2026-10-27T19:00:00+00:00",
       "close_usd": 402.32,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "NOW": {
       "date": "2026-10-27T19:00:00+00:00",
       "close_usd": 155.02,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "UBER": {
       "date": "2026-10-28T15:10:00+00:00",
       "close_usd": 64.93,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "SHOP": {
       "date": "2026-10-28T15:10:00+00:00",
       "close_usd": 165.89,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "COIN": {
       "date": "2026-10-28T15:10:00+00:00",
       "close_usd": 158.86,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "PYPL": {
       "date": "2026-10-28T15:10:00+00:00",
       "close_usd": 55.69,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "SQ": {
       "date": "2026-10-26T19:55:00+00:00",
       "close_usd": 74.55,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "JPM": {
       "date": "2026-10-30T16:35:00+00:00",
       "close_usd": 339.17,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": true
     },
     "BAC": {
       "date": "2026-10-28T15:25:00+00:00",
       "close_usd": 50.74,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "GS": {
       "date": "2026-10-28T15:25:00+00:00",
       "close_usd": 920.0,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "MS": {
       "date": "2026-10-28T15:25:00+00:00",
       "close_usd": 188.475,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "V": {
       "date": "2026-10-28T15:25:00+00:00",
       "close_usd": 403.725,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "MA": {
       "date": "2026-10-28T15:45:00+00:00",
       "close_usd": 615.83,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "BRK.B": {
       "date": "2026-10-28T15:45:00+00:00",
       "close_usd": 544.56,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "UNH": {
       "date": "2026-10-30T15:40:00+00:00",
       "close_usd": 407.41,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "JNJ": {
       "date": "2026-10-28T15:45:00+00:00",
       "close_usd": 271.81,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "LLY": {
       "date": "2026-10-28T15:45:00+00:00",
       "close_usd": 1293.88,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "ABBV": {
       "date": "2026-10-28T16:05:00+00:00",
       "close_usd": 287.33,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "XOM": {
       "date": "2026-10-30T16:35:00+00:00",
       "close_usd": 185.62,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": true
     },
     "CVX": {
       "date": "2026-10-28T16:05:00+00:00",
       "close_usd": 231.385,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "CAT": {
       "date": "2026-10-30T16:35:00+00:00",
       "close_usd": 629.82,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": true
     },
     "DE": {
       "date": "2026-10-28T16:05:00+00:00",
       "close_usd": 641.88,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "WMT": {
       "date": "2026-10-28T16:20:00+00:00",
       "close_usd": 118.735,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "COST": {
-      "date": "2026-10-30T15:05:00+00:00",
-      "close_usd": 1010.835,
+      "date": "2026-10-30T16:50:00+00:00",
+      "close_usd": 1018.79,
       "currency": "USD",
       "asset_class": "equity",
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": true
     },
     "SPY": {
       "date": "2026-10-28T16:20:00+00:00",
       "close_usd": 770.98,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "QQQ": {
       "date": "2026-10-28T16:20:00+00:00",
       "close_usd": 721.84,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "IWM": {
       "date": "2026-10-28T16:20:00+00:00",
       "close_usd": 279.99,
-      "source": "Twelve Data 5-minute bars (limited-venue US feed)"
+      "source": "Twelve Data 5-minute bars (limited-venue US feed)",
+      "is_fresh": false
     },
     "GBP/USD": {
-      "date": "2026-10-30T16:35:00+00:00",
-      "close_usd": 1.33977,
+      "date": "2026-10-30T16:50:00+00:00",
+      "close_usd": 1.33946,
       "currency": "USD",
       "asset_class": "forex",
-      "source": "Twelve Data 5-minute forex (indicative mid)"
+      "source": "Twelve Data 5-minute forex (indicative mid)",
+      "is_fresh": true
     },
     "EUR/USD": {
-      "date": "2026-10-30T16:35:00+00:00",
-      "close_usd": 1.1159,
+      "date": "2026-10-30T16:50:00+00:00",
+      "close_usd": 1.11559,
       "currency": "USD",
       "asset_class": "forex",
-      "source": "Twelve Data 5-minute forex (indicative mid)"
+      "source": "Twelve Data 5-minute forex (indicative mid)",
+      "is_fresh": true
     }
   },
   "events": [
@@ -409,7 +461,7 @@
     "2026-10-29T13:50:00+00:00 XOM reduced to free virtual capital",
     "2026-10-29T13:55:00+00:00 XOM closed early_profit_bank"
   ],
-  "updated_utc": "2026-10-30T16:41:52.217974+00:00",
+  "updated_utc": "2026-10-30T16:59:58.689944+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data US limited-venue feed and optional licensed UK intraday feed, plus indicative forex mid prices. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -450,19 +502,19 @@
     "KLAC": 1793127600,
     "PANW": 1793127600,
     "WMT": 1793204400,
-    "COST": 1793372700,
+    "COST": 1793379000,
     "SPY": 1793204400,
     "QQQ": 1793204400,
     "IWM": 1793204400,
-    "TSLA": 1793378100,
-    "NVDA": 1793378100,
+    "TSLA": 1793379000,
+    "NVDA": 1793379000,
     "AAPL": 1793376900,
-    "MSFT": 1793376000,
+    "MSFT": 1793379000,
     "AMZN": 1793376900,
     "GOOGL": 1793205600,
-    "META": 1793376000,
+    "META": 1793379000,
     "AVGO": 1793376900,
-    "AMD": 1793376000,
+    "AMD": 1793379000,
     "NFLX": 1793205600,
     "ADBE": 1793199000,
     "INTC": 1793199000,
@@ -483,14 +535,14 @@
     "UNH": 1793374800,
     "JNJ": 1793202300,
     "LLY": 1793202300,
-    "GBP/USD": 1793378100,
-    "EUR/USD": 1793378100
+    "GBP/USD": 1793379000,
+    "EUR/USD": 1793379000
   },
   "run_event": "watchdog",
-  "run_id": "41092207713",
+  "run_id": "41094875353",
   "market_session_open": true,
   "scan_diagnostics": {
-    "utc": "2026-10-30T16:41:52.217974+00:00",
+    "utc": "2026-10-30T16:59:58.689944+00:00",
     "universe_size": 18,
     "us_market_hours": true,
     "uk_market_hours": false,
@@ -500,29 +552,41 @@
       "GBP/USD",
       "EUR/USD",
       "NVDA",
+      "COST",
       "TSLA",
-      "CRWD",
-      "JPM",
-      "XOM",
-      "CAT"
+      "AMD",
+      "META",
+      "MSFT"
     ],
     "outcomes": {
       "GBP/USD": "fx_trend_not_confirmed",
       "EUR/USD": "fx_trend_not_confirmed",
       "NVDA": "trend_not_confirmed",
-      "TSLA": "no_15bar_breakout",
-      "CRWD": "trend_not_confirmed",
-      "JPM": "trend_not_confirmed",
-      "XOM": "trend_not_confirmed",
-      "CAT": "trend_not_confirmed"
+      "COST": "no_15bar_breakout",
+      "TSLA": "trend_not_confirmed",
+      "AMD": "trend_not_confirmed",
+      "META": "trend_not_confirmed",
+      "MSFT": "trend_not_confirmed"
     },
     "new_paper_entries": [],
     "cfd_proxy_outcomes": {
       "NVDA": "position_monitored",
-      "TSLA": "single_test_request_fulfilled"
+      "TSLA": "single_test_request_fulfilled",
+      "AMD": "single_test_request_fulfilled"
     },
     "entries_today": 0,
     "realized_pnl_today_gbp": 0,
+    "fresh_checked": [
+      "GBP/USD",
+      "EUR/USD",
+      "NVDA",
+      "COST",
+      "TSLA",
+      "AMD",
+      "META",
+      "MSFT"
+    ],
+    "stale_or_unavailable_checked": [],
     "cfd_proxy_balance_gbp": 1000.0,
     "cfd_proxy_open_positions": 1
   },
@@ -2061,6 +2125,55 @@
       "realized_pnl_today_gbp": 0,
       "cfd_proxy_balance_gbp": 1000.0,
       "cfd_proxy_open_positions": 1
+    },
+    {
+      "utc": "2026-10-30T16:59:58.689944+00:00",
+      "universe_size": 18,
+      "us_market_hours": true,
+      "uk_market_hours": false,
+      "forex_market_hours": true,
+      "uk_feed_status": "outside_uk_session",
+      "checked": [
+        "GBP/USD",
+        "EUR/USD",
+        "NVDA",
+        "COST",
+        "TSLA",
+        "AMD",
+        "META",
+        "MSFT"
+      ],
+      "outcomes": {
+        "GBP/USD": "fx_trend_not_confirmed",
+        "EUR/USD": "fx_trend_not_confirmed",
+        "NVDA": "trend_not_confirmed",
+        "COST": "no_15bar_breakout",
+        "TSLA": "trend_not_confirmed",
+        "AMD": "trend_not_confirmed",
+        "META": "trend_not_confirmed",
+        "MSFT": "trend_not_confirmed"
+      },
+      "new_paper_entries": [],
+      "cfd_proxy_outcomes": {
+        "NVDA": "position_monitored",
+        "TSLA": "single_test_request_fulfilled",
+        "AMD": "single_test_request_fulfilled"
+      },
+      "entries_today": 0,
+      "realized_pnl_today_gbp": 0,
+      "fresh_checked": [
+        "GBP/USD",
+        "EUR/USD",
+        "NVDA",
+        "COST",
+        "TSLA",
+        "AMD",
+        "META",
+        "MSFT"
+      ],
+      "stale_or_unavailable_checked": [],
+      "cfd_proxy_balance_gbp": 1000.0,
+      "cfd_proxy_open_positions": 1
     }
   ],
   "uk_feed_status": "outside_uk_session",
@@ -2104,9 +2217,9 @@
     },
     "trades": [],
     "last_processed": {
-      "NVDA": 1793378100,
-      "TSLA": 1793378100,
-      "AMD": 1793376000
+      "NVDA": 1793379000,
+      "TSLA": 1793379000,
+      "AMD": 1793379000
     },
     "diagnostics": {},
     "single_test_request": {
@@ -2122,6 +2235,6 @@
     "execution": "SIMULATED_ONLY_NO_LEVERAGE_NO_BROKER_ORDERS",
     "separate_research_account": true,
     "starting_balance_gbp": 1000.0,
-    "latest_scan_utc": "2026-10-30T16:41:52.217974+00:00"
+    "latest_scan_utc": "2026-10-30T16:59:58.689944+00:00"
   }
 }
