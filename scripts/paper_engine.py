@@ -83,7 +83,7 @@ FX_ROUND_TRIP_COST_RATE = 0.0004
 CANDIDATES_PER_SCAN = 5
 MAX_API_SYMBOLS_PER_SCAN = 8
 MAX_OPEN_POSITIONS = 4
-MAX_POSITION_GBP = 250.0
+MAX_POSITION_GBP = 400.0  # Virtual account topped up; planned risk cap remains £5 per trade.
 # Trim only oversized pre-existing positions, and only at a verified fresh
 # completed market candle. Preserve their stop/target for the remaining qty.
 LEGACY_POSITION_CAP_GBP = 200.0
