@@ -196,6 +196,7 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
                  "low": 99.0, "high": 101.0, "volume": 200}]
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "paper_state.json"
+            path.write_text(json.dumps({"cash_gbp": 10940.82, "positions": {}, "trades": [], "starting_balance_gbp": 1000, "virtual_deposits": [{"id": "paper-topup-2026-11-02-10000", "date_utc": "2026-11-02T14:00:00+00:00", "amount_gbp": 10000.0}]}))
             with patch.object(paper_engine, "STATE", path), \
                  patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "fake-key"}), \
                  patch.object(paper_engine, "selected_watchlist", return_value=["NVDA", "TSLA"]), \
@@ -364,6 +365,7 @@ class TestFreeForexMarket(unittest.TestCase):
                "low": 1.299, "high": 1.301, "volume": 0}
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "paper_state.json"
+            path.write_text(json.dumps({"cash_gbp": 10940.82, "positions": {}, "trades": [], "starting_balance_gbp": 1000, "virtual_deposits": [{"id": "paper-topup-2026-11-02-10000", "date_utc": "2026-11-02T14:00:00+00:00", "amount_gbp": 10000.0}]}))
             with patch.object(paper_engine, "STATE", path), \
                  patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock",
                                          "TRADELAB_FX_ENABLED": "true"}), \
@@ -408,6 +410,7 @@ class TestLegacyPositionRebalance(unittest.TestCase):
         bar = {"timestamp": int((now - timedelta(minutes=10)).timestamp()),
                "open": 99.0, "high": 100.4, "low": 98.9, "close": 99.7}
         state = self.make_state()
+        state["positions"]["TEST"]["qty"] = 40.0  # Historical position above the new £2,500 cap.
         original = state["positions"]["TEST"].copy()
         self.assertTrue(paper_engine.rebalance_legacy_position(state, "TEST", [bar], now))
         new_pos = state["positions"]["TEST"]
