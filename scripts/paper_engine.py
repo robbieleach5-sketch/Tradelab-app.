@@ -494,8 +494,30 @@ def daily_limits(state, session_day):
     return len(today_closed_entries) + len(today_open_entries), round(realized, 2), traded_today
 
 
+
+def publish_capital_summary(state):
+    """Separate virtual deposits from actual historical simulated trade P/L."""
+    deposits = state.get("virtual_deposits", [])
+    if not isinstance(deposits, list):
+        deposits = []
+    amounts = [float(d.get("amount_gbp", 0)) for d in deposits if isinstance(d, dict)]
+    topups = round(sum(amounts), 2)
+    realized = round(sum(float(t.get("pnl_gbp") or 0) for t in state.get("trades", [])), 2)
+    initial = float(state.get("starting_balance_gbp", START_GBP))
+    cash = round(float(state["cash_gbp"]), 2)
+    state["capital_summary"] = {
+        "initial_virtual_funding_gbp": round(initial, 2),
+        "additional_virtual_deposits_gbp": topups,
+        "total_virtual_funding_gbp": round(initial + topups, 2),
+        "realized_trading_pnl_gbp": realized,
+        "cash_balance_gbp": cash,
+        "reconciliation_difference_gbp": round(cash - (initial + topups + realized), 2),
+        "account_type": "SIMULATED_PAPER_ONLY_NO_REAL_MONEY",
+    }
+
 def publish_risk_status(state, session_day):
     """Expose reasons the paper engine cannot open trades today."""
+    publish_capital_summary(state)
     entries, realized, _ = daily_limits(state, session_day)
     committed = sum(
         p["entry_usd"] * p["qty"] /
