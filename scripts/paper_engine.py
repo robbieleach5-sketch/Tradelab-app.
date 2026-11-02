@@ -83,14 +83,14 @@ FX_ROUND_TRIP_COST_RATE = 0.0004
 CANDIDATES_PER_SCAN = 5
 MAX_API_SYMBOLS_PER_SCAN = 8
 MAX_OPEN_POSITIONS = 4
-MAX_POSITION_GBP = 250.0
+MAX_POSITION_GBP = 2500.0  # Paper-only exposure cap after the £10,000 virtual funding test.
 # Trim only oversized pre-existing positions, and only at a verified fresh
 # completed market candle. Preserve their stop/target for the remaining qty.
 LEGACY_POSITION_CAP_GBP = 200.0
-MAX_DAILY_ENTRIES = 5
-DAILY_LOSS_LIMIT_GBP = 15.0
+MAX_DAILY_ENTRIES = 8  # Paper-only; do not bypass signal or data freshness filters.
+DAILY_LOSS_LIMIT_GBP = 100.0  # Paper-only daily realised loss pause.
 STATE = Path("data/paper_state.json")
-RISK_GBP = 5.0
+RISK_GBP = 25.0  # Planned risk per paper entry; gaps and fees can exceed it.
 START_GBP = 1000.0
 STOP_PCT = 0.01
 TARGET_PCT = 0.015
@@ -494,8 +494,30 @@ def daily_limits(state, session_day):
     return len(today_closed_entries) + len(today_open_entries), round(realized, 2), traded_today
 
 
+
+def publish_capital_summary(state):
+    """Separate virtual deposits from actual historical simulated trade P/L."""
+    deposits = state.get("virtual_deposits", [])
+    if not isinstance(deposits, list):
+        deposits = []
+    amounts = [float(d.get("amount_gbp", 0)) for d in deposits if isinstance(d, dict)]
+    topups = round(sum(amounts), 2)
+    realized = round(sum(float(t.get("pnl_gbp") or 0) for t in state.get("trades", [])), 2)
+    initial = float(state.get("starting_balance_gbp", START_GBP))
+    cash = round(float(state["cash_gbp"]), 2)
+    state["capital_summary"] = {
+        "initial_virtual_funding_gbp": round(initial, 2),
+        "additional_virtual_deposits_gbp": topups,
+        "total_virtual_funding_gbp": round(initial + topups, 2),
+        "realized_trading_pnl_gbp": realized,
+        "cash_balance_gbp": cash,
+        "reconciliation_difference_gbp": round(cash - (initial + topups + realized), 2),
+        "account_type": "SIMULATED_PAPER_ONLY_NO_REAL_MONEY",
+    }
+
 def publish_risk_status(state, session_day):
     """Expose reasons the paper engine cannot open trades today."""
+    publish_capital_summary(state)
     entries, realized, _ = daily_limits(state, session_day)
     committed = sum(
         p["entry_usd"] * p["qty"] /

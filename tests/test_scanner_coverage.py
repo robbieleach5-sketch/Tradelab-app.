@@ -79,12 +79,12 @@ class TestMarketDataAge(unittest.TestCase):
 
 
 class TestRiskParametersUnchanged(unittest.TestCase):
-    def test_more_coverage_does_not_increase_risk_or_api_budget(self):
+    def test_paper_experiment_preserves_api_budget_and_position_count(self):
         self.assertEqual(paper_engine.MAX_API_SYMBOLS_PER_SCAN, 8)
-        self.assertEqual(paper_engine.MAX_DAILY_ENTRIES, 5)
-        self.assertEqual(paper_engine.DAILY_LOSS_LIMIT_GBP, 15)
-        self.assertEqual(paper_engine.RISK_GBP, 5)
-        self.assertEqual(paper_engine.MAX_POSITION_GBP, 250)
+        self.assertEqual(paper_engine.MAX_DAILY_ENTRIES, 8)
+        self.assertEqual(paper_engine.DAILY_LOSS_LIMIT_GBP, 100)
+        self.assertEqual(paper_engine.RISK_GBP, 25)
+        self.assertEqual(paper_engine.MAX_POSITION_GBP, 2500)
         self.assertEqual(paper_engine.MAX_OPEN_POSITIONS, 4)
         self.assertEqual(paper_engine.STOP_PCT, 0.01)
         self.assertEqual(paper_engine.TARGET_PCT, 0.015)

@@ -152,7 +152,10 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
     def test_smaller_targets_and_capital_per_trade(self):
         self.assertEqual(paper_engine.STOP_PCT, 0.01)
         self.assertEqual(paper_engine.TARGET_PCT, 0.015)
-        self.assertEqual(paper_engine.MAX_POSITION_GBP, 250.0)
+        self.assertEqual(paper_engine.MAX_POSITION_GBP, 2500.0)
+        self.assertEqual(paper_engine.RISK_GBP, 25.0)
+        self.assertEqual(paper_engine.DAILY_LOSS_LIMIT_GBP, 100.0)
+        self.assertEqual(paper_engine.MAX_DAILY_ENTRIES, 8)
         self.assertEqual(paper_engine.MAX_OPEN_POSITIONS, 4)
 
     def test_four_positions_still_respect_api_limit(self):
@@ -186,13 +189,14 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
         self.assertEqual(realized, -8.3)
         self.assertEqual(tickers, {"TSLA", "NVDA"})
 
-    def test_new_entries_cap_250_gbp_each(self):
+    def test_new_entries_cap_2500_gbp_each(self):
         now = datetime(2026, 10, 29, 15, tzinfo=timezone.utc)
         stamp = int((now - timedelta(minutes=10)).timestamp())
         bars = [{"timestamp": stamp, "close": 100.0, "open": 100.0,
                  "low": 99.0, "high": 101.0, "volume": 200}]
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "paper_state.json"
+            path.write_text(json.dumps({"cash_gbp": 10940.82, "positions": {}, "trades": [], "starting_balance_gbp": 1000, "virtual_deposits": [{"id": "paper-topup-2026-11-02-10000", "date_utc": "2026-11-02T14:00:00+00:00", "amount_gbp": 10000.0}]}))
             with patch.object(paper_engine, "STATE", path), \
                  patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "fake-key"}), \
                  patch.object(paper_engine, "selected_watchlist", return_value=["NVDA", "TSLA"]), \
@@ -203,7 +207,7 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
             self.assertEqual(set(state["positions"]), {"NVDA", "TSLA"})
             for position in state["positions"].values():
                 self.assertLessEqual(
-                    position["entry_usd"] * position["qty"] / paper_engine.USD_PER_GBP, 250.01
+                    position["entry_usd"] * position["qty"] / paper_engine.USD_PER_GBP, 2500.01
                 )
                 self.assertAlmostEqual(position["target_usd"] / position["entry_usd"], 1.015, places=4)
 
@@ -243,7 +247,7 @@ class TestOptionalUKMarket(unittest.TestCase):
             self.assertEqual(list(saved["positions"]), ["SHEL"])
             pos = saved["positions"]["SHEL"]
             self.assertEqual(pos["currency"], "GBP")
-            self.assertLessEqual(pos["qty"] * pos["entry_usd"], 250.01)
+            self.assertLessEqual(pos["qty"] * pos["entry_usd"], 2500.01)
             self.assertAlmostEqual(pos["stop_usd"], 9.9, places=4)
             self.assertAlmostEqual(pos["target_usd"], 10.15, places=4)
             prices.assert_called_once_with("SHEL", market="UK")
@@ -361,6 +365,7 @@ class TestFreeForexMarket(unittest.TestCase):
                "low": 1.299, "high": 1.301, "volume": 0}
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "paper_state.json"
+            path.write_text(json.dumps({"cash_gbp": 10940.82, "positions": {}, "trades": [], "starting_balance_gbp": 1000, "virtual_deposits": [{"id": "paper-topup-2026-11-02-10000", "date_utc": "2026-11-02T14:00:00+00:00", "amount_gbp": 10000.0}]}))
             with patch.object(paper_engine, "STATE", path), \
                  patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "mock",
                                          "TRADELAB_FX_ENABLED": "true"}), \
@@ -373,7 +378,7 @@ class TestFreeForexMarket(unittest.TestCase):
             for sym, p in state["positions"].items():
                 self.assertIn(sym, paper_engine.FOREX_SYMBOLS)
                 self.assertEqual(p["asset_class"], "forex")
-                self.assertLessEqual(p["qty"] * p["entry_usd"] / USD_PER_GBP, 250.01)
+                self.assertLessEqual(p["qty"] * p["entry_usd"] / USD_PER_GBP, 2500.01)
                 self.assertAlmostEqual(p["stop_usd"]/p["entry_usd"],
                                        1-paper_engine.FX_STOP_PCT, places=4)
                 self.assertAlmostEqual(p["target_usd"]/p["entry_usd"],
@@ -405,6 +410,7 @@ class TestLegacyPositionRebalance(unittest.TestCase):
         bar = {"timestamp": int((now - timedelta(minutes=10)).timestamp()),
                "open": 99.0, "high": 100.4, "low": 98.9, "close": 99.7}
         state = self.make_state()
+        state["positions"]["TEST"]["qty"] = 40.0  # Historical position above the new £2,500 cap.
         original = state["positions"]["TEST"].copy()
         self.assertTrue(paper_engine.rebalance_legacy_position(state, "TEST", [bar], now))
         new_pos = state["positions"]["TEST"]
@@ -444,6 +450,32 @@ class TestLegacyPositionRebalance(unittest.TestCase):
         self.assertGreater(988.76 - remaining, 500)
 
 
+
+class TestVirtualCapitalAccounting(unittest.TestCase):
+    def test_paper_topup_is_not_counted_as_profit(self):
+        state = {
+            "starting_balance_gbp": 1000.0,
+            "virtual_deposits": [{
+                "id": "paper-topup-2026-11-02-10000",
+                "date_utc": "2026-11-02T14:00:00+00:00",
+                "amount_gbp": 10000.0,
+                "type": "virtual_topup",
+            }],
+            "cash_gbp": 10940.82,
+            "positions": {},
+            "trades": [{"pnl_gbp": -59.18}],
+        }
+        paper_engine.publish_capital_summary(state)
+        result = state["capital_summary"]
+        self.assertEqual(result["total_virtual_funding_gbp"], 11000)
+        self.assertEqual(result["additional_virtual_deposits_gbp"], 10000)
+        self.assertEqual(result["realized_trading_pnl_gbp"], -59.18)
+        self.assertEqual(result["cash_balance_gbp"], 10940.82)
+        self.assertEqual(result["reconciliation_difference_gbp"], 0)
+        paper_engine.publish_capital_summary(state)
+        self.assertEqual(state["cash_gbp"], 10940.82)
+
+
 class TestRiskStatusDisplay(unittest.TestCase):
     def test_daily_gap_loss_halts_new_entries_and_reports_cash(self):
         now = datetime(2026, 10, 29, 14, 0, tzinfo=timezone.utc)
@@ -452,14 +484,14 @@ class TestRiskStatusDisplay(unittest.TestCase):
         state = {"cash_gbp": 937.62,
                  "positions": {"XOM": {"entry_usd": 181.86000061035156, "qty": 3.65666}},
                  "trades": [{"ticker": "CAT", "entry_date": "2026-10-27T14:55:00+00:00",
-                             "exit_date": "2026-10-29T13:30:00+00:00", "pnl_gbp": -51.14}]}
+                             "exit_date": "2026-10-29T13:30:00+00:00", "pnl_gbp": -151.14}]}
         paper_engine.publish_risk_status(state, day)
         risk = state["risk_status"]
         self.assertTrue(risk["daily_loss_halt"])
         self.assertEqual(risk["entry_pause_reason"], "daily_loss_limit")
         self.assertAlmostEqual(risk["available_virtual_cash_gbp"], 437.62, places=2)
         self.assertEqual(risk["entries_today"], 0)
-        self.assertEqual(risk["daily_realized_pnl_gbp"], -51.14)
+        self.assertEqual(risk["daily_realized_pnl_gbp"], -151.14)
 
     def test_fresh_day_releases_loss_pause_without_fabricating_capital(self):
         from zoneinfo import ZoneInfo
