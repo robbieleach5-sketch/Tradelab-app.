@@ -12,6 +12,7 @@ from pathlib import Path
 
 SYMBOLS = {
     "TSLA": "tsla.us",
+    "INO": "ino.us",
     "NVDA": "nvda.us",
     "AAPL": "aapl.us",
     "MSFT": "msft.us",
@@ -65,6 +66,11 @@ SYMBOLS = {
 # A focused, diversified paper-trading watchlist is revisited much more
 # often than the previous ~50-name full-universe rotation. These names are
 # hypotheses to test, NOT proven winning stocks or live recommendations.
+INO_PAPER_TICKER = "INO"
+INO_PAPER_FIRST_DAY_US = "2026-11-02"
+INO_PAPER_LAST_DAY_US = "2026-11-03"
+# One-off educational paper request. Only scan / enter on verified US session bars;
+# expiry prevents the bot treating an old biotech catalyst as an evergreen signal.
 FOCUS_SYMBOLS = (
     "NVDA", "TSLA", "AMD", "META", "MSFT", "AAPL", "AMZN", "AVGO",
     "PLTR", "MU", "CRWD", "JPM", "XOM", "CAT", "UNH", "COST",
@@ -198,6 +204,52 @@ def selected_uk_candidates(now, positions):
     ][:UK_CANDIDATES_PER_SCAN]
 
 
+def ino_request_status(now, state):
+    """No invented fills: derive the one-shot's status from actual virtual trades."""
+    from zoneinfo import ZoneInfo
+    session = now.astimezone(ZoneInfo("America/New_York")).date().isoformat()
+    if session < INO_PAPER_FIRST_DAY_US:
+        return "awaiting_date"
+    if INO_PAPER_TICKER in state.get("positions", {}):
+        return "virtual_position_open"
+    if any(
+        t.get("ticker") == INO_PAPER_TICKER
+        and (ny_trade_date(t.get("entry_date")) is not None)
+        and INO_PAPER_FIRST_DAY_US <= ny_trade_date(t.get("entry_date")).isoformat() <= INO_PAPER_LAST_DAY_US
+        for t in state.get("trades", [])
+    ):
+        return "paper_trade_completed"
+    if session > INO_PAPER_LAST_DAY_US:
+        return "expired_without_entry"
+    return "queued_for_confirmed_us_breakout"
+
+
+def assess_ino_opening_breakout(completed, now):
+    """Require the first 15-minute US opening range before an INO long paper entry."""
+    from zoneinfo import ZoneInfo
+    ny = ZoneInfo("America/New_York")
+    local_now = now.astimezone(ny)
+    if (local_now.hour, local_now.minute) < (9, 50):
+        return False, "ino_opening_range_wait"
+    session_date = local_now.date()
+    opening = {}
+    for bar in completed:
+        local = datetime.fromtimestamp(bar["timestamp"], timezone.utc).astimezone(ny)
+        if local.date() == session_date and (local.hour, local.minute) in ((9, 30), (9, 35), (9, 40)):
+            opening[(local.hour, local.minute)] = bar
+    if len(opening) != 3:
+        return False, "ino_opening_range_missing"
+    last_local = datetime.fromtimestamp(completed[-1]["timestamp"], timezone.utc).astimezone(ny)
+    if last_local.date() != session_date or (last_local.hour, last_local.minute) < (9, 45):
+        return False, "ino_latest_bar_not_after_opening_range"
+    eligible, reason = assess_breakout(completed)
+    if not eligible:
+        return False, reason
+    if completed[-1]["close"] <= max(b["high"] for b in opening.values()):
+        return False, "ino_below_opening_range_high"
+    return True, "confirmed_ino_opening_range_breakout"
+
+
 def select_active_watchlist(now, positions, us_active, uk_active, fx_active=False, scan_state=None):
     """Prioritize open positions, then rotate candidates within eight API credits.
 
@@ -231,9 +283,15 @@ def select_active_watchlist(now, positions, us_active, uk_active, fx_active=Fals
         symbol for symbol in cfd.get("positions", {})
         if symbol in cfd_proxy_paper.PROXY_SYMBOLS and symbol not in positions
     ] if us_active else []
+    # Ensure the user-requested one-shot is checked every US scan while pending.
+    # It occupies a normal API slot: the eight-credit budget is unchanged.
+    special = ([INO_PAPER_TICKER] if us_active
+               and ino_request_status(now, scan_state or {}) == "queued_for_confirmed_us_breakout"
+               and INO_PAPER_TICKER not in positions else [])
     # Monitor every FX pair when possible. Spare credits support other exchanges.
     chosen = fx_candidates[:min(FOREX_CANDIDATES_PER_SCAN, remaining)]
-    for candidate_list, cap in ((us_priority, MAX_API_SYMBOLS_PER_SCAN),
+    for candidate_list, cap in ((special, MAX_API_SYMBOLS_PER_SCAN),
+                                 (us_priority, MAX_API_SYMBOLS_PER_SCAN),
                                  (uk_candidates, 2 if us_active else UK_CANDIDATES_PER_SCAN),
                                  (us_candidates, MAX_API_SYMBOLS_PER_SCAN),
                                  (uk_candidates, UK_CANDIDATES_PER_SCAN)):
@@ -563,6 +621,12 @@ def main(now=None):
                          ("events", []), ("positions", {}), ("trades", [])):
         state.setdefault(key, default)
     mark_quote_freshness(state["quotes"], now)
+    state["user_paper_request"] = {
+        "ticker": INO_PAPER_TICKER, "side": "long", "first_day_us": INO_PAPER_FIRST_DAY_US,
+        "last_day_us": INO_PAPER_LAST_DAY_US,
+        "status": ino_request_status(now, state),
+        "execution": "SIMULATED_ONLY_CONDITIONAL_FRESH_DATA",
+    }
     # Always clear old alerts, even when the scanner is in standby or has no feed.
     state["early_watchlist"] = []
     cfd_book = cfd_proxy_paper.initialize(state)
@@ -659,8 +723,11 @@ def main(now=None):
                       (fx_active and (uk.hour, uk.minute) < (20, 45)) if market == "FX" else allow_entry):
                 report["outcomes"][ticker] = "new_entries_closed"
             else:
-                eligible, reason = (assess_forex_breakout(completed) if market == "FX"
-                                    else assess_breakout(completed))
+                eligible, reason = (
+                    assess_forex_breakout(completed) if market == "FX"
+                    else assess_ino_opening_breakout(completed, now) if ticker == INO_PAPER_TICKER
+                    else assess_breakout(completed)
+                )
                 # Re-check limits after every entry/exit in this scan.
                 entries_today, realized_today, traded_today = daily_limits(state, ny.date())
                 if eligible and len(state["positions"]) >= MAX_OPEN_POSITIONS:
@@ -712,6 +779,14 @@ def main(now=None):
     # Ranked research alerts only; these never alter paper position decisions.
     report["early_watch"].sort(key=lambda item: (item["distance_to_trigger_pct"], -item["volume_multiple"]))
     state["early_watchlist"] = report["early_watch"][:8]
+    state["user_paper_request"]["status"] = ino_request_status(now, state)
+    if state["user_paper_request"]["status"] == "queued_for_confirmed_us_breakout":
+        if not regular:
+            state["user_paper_request"]["status"] = "awaiting_us_market"
+        elif "INO" in report["outcomes"]:
+            state["user_paper_request"]["latest_scan_result"] = report["outcomes"]["INO"]
+        else:
+            state["user_paper_request"]["status"] = "not_scanned_in_this_cycle"
     report["entries_today"] = entries_today
     report["realized_pnl_today_gbp"] = realized_today
     report["fresh_checked"] = [
