@@ -265,6 +265,44 @@ def selected_watchlist(now, positions, candidate_limit=CANDIDATES_PER_SCAN):
     return opened + candidates
 
 
+
+def assess_early_warning(completed):
+    """Research-only near-breakout setup on completed five-minute equity bars.
+
+    Not a confirmed breakout, trade instruction, or automatic order signal.
+    Requires 50 preceding closes and 20 valid prior volume bars.
+    """
+    if len(completed) < 51:
+        return None
+    previous, bar = completed[:-1], completed[-1]
+    try:
+        close = float(bar["close"])
+        mean20 = sum(float(b["close"]) for b in previous[-20:]) / 20
+        mean50 = sum(float(b["close"]) for b in previous[-50:]) / 50
+        level = max(float(b["high"]) for b in previous[-15:])
+        volumes = [float(b["volume"]) for b in previous[-20:]]
+        volume = float(bar["volume"])
+        tight_bars = previous[-6:] + [bar]
+        recent_range = max(float(b["high"]) for b in tight_bars) - min(float(b["low"]) for b in tight_bars)
+        higher_lows = min(float(b["low"]) for b in previous[-3:]) > min(
+            float(b["low"]) for b in previous[-6:-3]
+        )
+    except (KeyError, ValueError, TypeError, ZeroDivisionError):
+        return None
+    if (min(close, level, mean20, mean50, volume, *volumes) <= 0
+            or not (mean20 > mean50 and close > mean20)
+            or not (0.995 * level <= close < level)
+            or volume < 1.2 * (sum(volumes) / len(volumes))
+            or recent_range > close * 0.02
+            or not higher_lows):
+        return None
+    return {
+        "status": "near_resistance_research_only",
+        "trigger_price": round(level, 4),
+        "distance_to_trigger_pct": round((level / close - 1) * 100, 3),
+        "volume_multiple": round(volume / (sum(volumes) / len(volumes)), 2),
+    }
+
 def assess_breakout(completed):
     """Identify why a new 5-minute paper entry is rejected.
 
@@ -503,6 +541,8 @@ def main(now=None):
                          ("events", []), ("positions", {}), ("trades", [])):
         state.setdefault(key, default)
     mark_quote_freshness(state["quotes"], now)
+    # Always clear old alerts, even when the scanner is in standby or has no feed.
+    state["early_watchlist"] = []
     cfd_book = cfd_proxy_paper.initialize(state)
     if not os.environ.get("TWELVE_DATA_API_KEY"):
         state["errors"]["DATA_CONFIG"] = "Missing GitHub Actions secret TWELVE_DATA_API_KEY"
@@ -543,7 +583,7 @@ def main(now=None):
               "us_market_hours": regular, "uk_market_hours": uk_hours, "forex_market_hours": fx_active,
               "uk_feed_status": state["uk_feed_status"],
               "checked": list(watchlist), "outcomes": {}, "new_paper_entries": [],
-              "cfd_proxy_outcomes": {}}
+              "cfd_proxy_outcomes": {}, "early_watch": []}
     for ticker in watchlist:
         try:
             market = "FX" if ticker in FOREX_SYMBOLS else "UK" if ticker in UK_FOCUS_SYMBOLS else "US"
@@ -574,6 +614,14 @@ def main(now=None):
                 report["outcomes"][ticker] = "already_processed"
                 state["errors"].pop(ticker, None)
                 continue
+            if market != "FX" and ticker not in state["positions"]:
+                early = assess_early_warning(completed)
+                if early:
+                    report["early_watch"].append({
+                        "ticker": ticker, "bar_time_utc": bar_time.isoformat(),
+                        "currency": "GBP" if market == "UK" else "USD",
+                        **early,
+                    })
             position = state["positions"].get(ticker)
             if position:
                 closed = settle_open_position(state, ticker, completed)
@@ -639,6 +687,9 @@ def main(now=None):
             report["outcomes"][ticker] = "provider_error"
             state["errors"][ticker] = str(exc)[:200]
     entries_today, realized_today, _ = daily_limits(state, ny.date())
+    # Ranked research alerts only; these never alter paper position decisions.
+    report["early_watch"].sort(key=lambda item: (item["distance_to_trigger_pct"], -item["volume_multiple"]))
+    state["early_watchlist"] = report["early_watch"][:8]
     report["entries_today"] = entries_today
     report["realized_pnl_today_gbp"] = realized_today
     report["fresh_checked"] = [
