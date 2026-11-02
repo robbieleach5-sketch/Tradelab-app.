@@ -152,7 +152,9 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
     def test_smaller_targets_and_capital_per_trade(self):
         self.assertEqual(paper_engine.STOP_PCT, 0.01)
         self.assertEqual(paper_engine.TARGET_PCT, 0.015)
-        self.assertEqual(paper_engine.MAX_POSITION_GBP, 250.0)
+        self.assertEqual(paper_engine.MAX_POSITION_GBP, 400.0)
+        self.assertEqual(paper_engine.RISK_GBP, 5.0)
+        self.assertEqual(paper_engine.DAILY_LOSS_LIMIT_GBP, 15.0)
         self.assertEqual(paper_engine.MAX_OPEN_POSITIONS, 4)
 
     def test_four_positions_still_respect_api_limit(self):
@@ -186,7 +188,7 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
         self.assertEqual(realized, -8.3)
         self.assertEqual(tickers, {"TSLA", "NVDA"})
 
-    def test_new_entries_cap_250_gbp_each(self):
+    def test_new_entries_cap_400_gbp_each(self):
         now = datetime(2026, 10, 29, 15, tzinfo=timezone.utc)
         stamp = int((now - timedelta(minutes=10)).timestamp())
         bars = [{"timestamp": stamp, "close": 100.0, "open": 100.0,
@@ -203,7 +205,7 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
             self.assertEqual(set(state["positions"]), {"NVDA", "TSLA"})
             for position in state["positions"].values():
                 self.assertLessEqual(
-                    position["entry_usd"] * position["qty"] / paper_engine.USD_PER_GBP, 250.01
+                    position["entry_usd"] * position["qty"] / paper_engine.USD_PER_GBP, 400.01
                 )
                 self.assertAlmostEqual(position["target_usd"] / position["entry_usd"], 1.015, places=4)
 
@@ -243,7 +245,7 @@ class TestOptionalUKMarket(unittest.TestCase):
             self.assertEqual(list(saved["positions"]), ["SHEL"])
             pos = saved["positions"]["SHEL"]
             self.assertEqual(pos["currency"], "GBP")
-            self.assertLessEqual(pos["qty"] * pos["entry_usd"], 250.01)
+            self.assertLessEqual(pos["qty"] * pos["entry_usd"], 400.01)
             self.assertAlmostEqual(pos["stop_usd"], 9.9, places=4)
             self.assertAlmostEqual(pos["target_usd"], 10.15, places=4)
             prices.assert_called_once_with("SHEL", market="UK")
@@ -373,7 +375,7 @@ class TestFreeForexMarket(unittest.TestCase):
             for sym, p in state["positions"].items():
                 self.assertIn(sym, paper_engine.FOREX_SYMBOLS)
                 self.assertEqual(p["asset_class"], "forex")
-                self.assertLessEqual(p["qty"] * p["entry_usd"] / USD_PER_GBP, 250.01)
+                self.assertLessEqual(p["qty"] * p["entry_usd"] / USD_PER_GBP, 400.01)
                 self.assertAlmostEqual(p["stop_usd"]/p["entry_usd"],
                                        1-paper_engine.FX_STOP_PCT, places=4)
                 self.assertAlmostEqual(p["target_usd"]/p["entry_usd"],
