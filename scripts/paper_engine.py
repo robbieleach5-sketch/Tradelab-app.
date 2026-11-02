@@ -83,14 +83,14 @@ FX_ROUND_TRIP_COST_RATE = 0.0004
 CANDIDATES_PER_SCAN = 5
 MAX_API_SYMBOLS_PER_SCAN = 8
 MAX_OPEN_POSITIONS = 4
-MAX_POSITION_GBP = 400.0  # Virtual account topped up; planned risk cap remains £5 per trade.
+MAX_POSITION_GBP = 2500.0  # Paper-only exposure cap after the £10,000 virtual funding test.
 # Trim only oversized pre-existing positions, and only at a verified fresh
 # completed market candle. Preserve their stop/target for the remaining qty.
 LEGACY_POSITION_CAP_GBP = 200.0
-MAX_DAILY_ENTRIES = 5
-DAILY_LOSS_LIMIT_GBP = 15.0
+MAX_DAILY_ENTRIES = 8  # Paper-only; do not bypass signal or data freshness filters.
+DAILY_LOSS_LIMIT_GBP = 100.0  # Paper-only daily realised loss pause.
 STATE = Path("data/paper_state.json")
-RISK_GBP = 5.0
+RISK_GBP = 25.0  # Planned risk per paper entry; gaps and fees can exceed it.
 START_GBP = 1000.0
 STOP_PCT = 0.01
 TARGET_PCT = 0.015
