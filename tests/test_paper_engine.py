@@ -447,6 +447,32 @@ class TestLegacyPositionRebalance(unittest.TestCase):
         self.assertGreater(988.76 - remaining, 500)
 
 
+
+class TestVirtualCapitalAccounting(unittest.TestCase):
+    def test_paper_topup_is_not_counted_as_profit(self):
+        state = {
+            "starting_balance_gbp": 1000.0,
+            "virtual_deposits": [{
+                "id": "paper-topup-2026-11-02-10000",
+                "date_utc": "2026-11-02T14:00:00+00:00",
+                "amount_gbp": 10000.0,
+                "type": "virtual_topup",
+            }],
+            "cash_gbp": 10940.82,
+            "positions": {},
+            "trades": [{"pnl_gbp": -59.18}],
+        }
+        paper_engine.publish_capital_summary(state)
+        result = state["capital_summary"]
+        self.assertEqual(result["total_virtual_funding_gbp"], 11000)
+        self.assertEqual(result["additional_virtual_deposits_gbp"], 10000)
+        self.assertEqual(result["realized_trading_pnl_gbp"], -59.18)
+        self.assertEqual(result["cash_balance_gbp"], 10940.82)
+        self.assertEqual(result["reconciliation_difference_gbp"], 0)
+        paper_engine.publish_capital_summary(state)
+        self.assertEqual(state["cash_gbp"], 10940.82)
+
+
 class TestRiskStatusDisplay(unittest.TestCase):
     def test_daily_gap_loss_halts_new_entries_and_reports_cash(self):
         now = datetime(2026, 10, 29, 14, 0, tzinfo=timezone.utc)
