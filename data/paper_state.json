@@ -168,11 +168,11 @@
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": true
+      "is_fresh": false
     },
     "MSFT": {
-      "date": "2026-11-03T18:45:00+00:00",
-      "close_usd": 521.045,
+      "date": "2026-11-03T19:05:00+00:00",
+      "close_usd": 521.31,
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
@@ -184,7 +184,7 @@
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": true
+      "is_fresh": false
     },
     "GOOGL": {
       "date": "2026-10-28T16:40:00+00:00",
@@ -198,7 +198,7 @@
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": true
+      "is_fresh": false
     },
     "AVGO": {
       "date": "2026-11-03T18:45:00+00:00",
@@ -206,7 +206,7 @@
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": true
+      "is_fresh": false
     },
     "AMD": {
       "date": "2026-11-03T18:30:00+00:00",
@@ -214,7 +214,7 @@
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": true
+      "is_fresh": false
     },
     "NFLX": {
       "date": "2026-10-28T16:40:00+00:00",
@@ -228,7 +228,7 @@
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": true
+      "is_fresh": false
     },
     "CRWD": {
       "date": "2026-11-03T18:45:00+00:00",
@@ -236,7 +236,7 @@
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": true
+      "is_fresh": false
     },
     "NET": {
       "date": "2026-10-28T16:55:00+00:00",
@@ -274,7 +274,7 @@
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": true
+      "is_fresh": false
     },
     "QCOM": {
       "date": "2026-10-28T14:50:00+00:00",
@@ -393,12 +393,12 @@
       "is_fresh": false
     },
     "UNH": {
-      "date": "2026-11-03T18:10:00+00:00",
-      "close_usd": 404.095,
+      "date": "2026-11-03T19:05:00+00:00",
+      "close_usd": 404.18,
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": false
+      "is_fresh": true
     },
     "JNJ": {
       "date": "2026-10-28T15:45:00+00:00",
@@ -419,12 +419,12 @@
       "is_fresh": false
     },
     "XOM": {
-      "date": "2026-11-03T17:15:00+00:00",
-      "close_usd": 177.87,
+      "date": "2026-11-03T19:05:00+00:00",
+      "close_usd": 177.51,
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": false
+      "is_fresh": true
     },
     "CVX": {
       "date": "2026-10-28T16:05:00+00:00",
@@ -433,12 +433,12 @@
       "is_fresh": false
     },
     "CAT": {
-      "date": "2026-11-03T18:10:00+00:00",
-      "close_usd": 625.15,
+      "date": "2026-11-03T19:05:00+00:00",
+      "close_usd": 623.3,
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": false
+      "is_fresh": true
     },
     "DE": {
       "date": "2026-10-28T16:05:00+00:00",
@@ -453,12 +453,12 @@
       "is_fresh": false
     },
     "COST": {
-      "date": "2026-11-03T18:10:00+00:00",
-      "close_usd": 1020.45,
+      "date": "2026-11-03T19:05:00+00:00",
+      "close_usd": 1025.155,
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
-      "is_fresh": false
+      "is_fresh": true
     },
     "SPY": {
       "date": "2026-10-28T16:20:00+00:00",
@@ -479,24 +479,24 @@
       "is_fresh": false
     },
     "GBP/USD": {
-      "date": "2026-11-03T18:45:00+00:00",
-      "close_usd": 1.34221,
+      "date": "2026-11-03T19:05:00+00:00",
+      "close_usd": 1.34239,
       "currency": "USD",
       "asset_class": "forex",
       "source": "Twelve Data 5-minute forex (indicative mid)",
       "is_fresh": true
     },
     "EUR/USD": {
-      "date": "2026-11-03T18:45:00+00:00",
-      "close_usd": 1.11941,
+      "date": "2026-11-03T19:05:00+00:00",
+      "close_usd": 1.11961,
       "currency": "USD",
       "asset_class": "forex",
       "source": "Twelve Data 5-minute forex (indicative mid)",
       "is_fresh": true
     },
     "INO": {
-      "date": "2026-11-03T18:45:00+00:00",
-      "close_usd": 1.67,
+      "date": "2026-11-03T19:05:00+00:00",
+      "close_usd": 1.71,
       "currency": "USD",
       "asset_class": "equity",
       "source": "Twelve Data 5-minute bars (limited-venue US feed)",
@@ -518,7 +518,7 @@
     "2026-11-03T17:50:00+00:00 MSFT opened virtual long (5m)",
     "2026-11-03T18:10:00+00:00 EUR/USD opened virtual long (5m)"
   ],
-  "updated_utc": "2026-11-03T18:54:19.750700+00:00",
+  "updated_utc": "2026-11-03T19:12:20.749411+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data US limited-venue feed and optional licensed UK intraday feed, plus indicative forex mid prices. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -544,7 +544,7 @@
   },
   "last_processed_intraday": {
     "NOW": 1793127600,
-    "XOM": 1793726100,
+    "XOM": 1793732700,
     "PLTR": 1793731500,
     "CRWD": 1793731500,
     "NET": 1793206500,
@@ -552,21 +552,21 @@
     "CRM": 1793206500,
     "ABBV": 1793203500,
     "CVX": 1793203500,
-    "CAT": 1793729400,
+    "CAT": 1793732700,
     "DE": 1793203500,
     "AMAT": 1793127600,
     "LRCX": 1793127600,
     "KLAC": 1793127600,
     "PANW": 1793127600,
     "WMT": 1793204400,
-    "COST": 1793729400,
+    "COST": 1793732700,
     "SPY": 1793204400,
     "QQQ": 1793204400,
     "IWM": 1793204400,
     "TSLA": 1793727300,
     "NVDA": 1793729400,
     "AAPL": 1793730600,
-    "MSFT": 1793731500,
+    "MSFT": 1793732700,
     "AMZN": 1793730600,
     "GOOGL": 1793205600,
     "META": 1793730600,
@@ -589,18 +589,18 @@
     "V": 1793201100,
     "MA": 1793202300,
     "BRK.B": 1793202300,
-    "UNH": 1793729400,
+    "UNH": 1793732700,
     "JNJ": 1793202300,
     "LLY": 1793202300,
-    "GBP/USD": 1793731500,
-    "EUR/USD": 1793731500,
-    "INO": 1793731500
+    "GBP/USD": 1793732700,
+    "EUR/USD": 1793732700,
+    "INO": 1793732700
   },
   "run_event": "watchdog",
-  "run_id": "41698143885",
+  "run_id": "41701006372",
   "market_session_open": true,
   "scan_diagnostics": {
-    "utc": "2026-11-03T18:54:19.750700+00:00",
+    "utc": "2026-11-03T19:12:20.749411+00:00",
     "universe_size": 18,
     "us_market_hours": true,
     "uk_market_hours": false,
@@ -611,20 +611,20 @@
       "EUR/USD",
       "GBP/USD",
       "INO",
-      "AVGO",
-      "PLTR",
-      "MU",
-      "CRWD"
+      "XOM",
+      "CAT",
+      "UNH",
+      "COST"
     ],
     "outcomes": {
       "MSFT": "position_monitored",
       "EUR/USD": "position_monitored",
-      "GBP/USD": "fx_trend_not_confirmed",
+      "GBP/USD": "fx_no_breakout",
       "INO": "trend_not_confirmed",
-      "AVGO": "trend_not_confirmed",
-      "PLTR": "no_15bar_breakout",
-      "MU": "trend_not_confirmed",
-      "CRWD": "trend_not_confirmed"
+      "XOM": "trend_not_confirmed",
+      "CAT": "trend_not_confirmed",
+      "UNH": "no_15bar_breakout",
+      "COST": "trend_not_confirmed"
     },
     "new_paper_entries": [],
     "cfd_proxy_outcomes": {},
@@ -636,53 +636,16 @@
       "EUR/USD",
       "GBP/USD",
       "INO",
-      "AVGO",
-      "PLTR",
-      "MU",
-      "CRWD"
+      "XOM",
+      "CAT",
+      "UNH",
+      "COST"
     ],
     "stale_or_unavailable_checked": [],
     "cfd_proxy_balance_gbp": 1001.15,
     "cfd_proxy_open_positions": 0
   },
   "scan_history": [
-    {
-      "utc": "2026-10-29T15:55:15.877216+00:00",
-      "universe_size": 18,
-      "us_market_hours": true,
-      "uk_market_hours": true,
-      "forex_market_hours": true,
-      "uk_feed_status": "awaiting_live_uk_data_entitlement",
-      "checked": [
-        "GBP/USD",
-        "EUR/USD",
-        "NVDA",
-        "TSLA",
-        "JPM",
-        "XOM",
-        "CAT",
-        "UNH"
-      ],
-      "outcomes": {
-        "GBP/USD": "fx_no_breakout",
-        "EUR/USD": "fx_no_breakout",
-        "NVDA": "trend_not_confirmed",
-        "TSLA": "no_15bar_breakout",
-        "JPM": "trend_not_confirmed",
-        "XOM": "trend_not_confirmed",
-        "CAT": "trend_not_confirmed",
-        "UNH": "trend_not_confirmed"
-      },
-      "new_paper_entries": [],
-      "cfd_proxy_outcomes": {
-        "NVDA": "entries_paused",
-        "TSLA": "entries_paused"
-      },
-      "entries_today": 0,
-      "realized_pnl_today_gbp": -47.94,
-      "cfd_proxy_balance_gbp": 1000.0,
-      "cfd_proxy_open_positions": 0
-    },
     {
       "utc": "2026-10-29T16:12:26.635042+00:00",
       "universe_size": 18,
@@ -3890,6 +3853,52 @@
       "stale_or_unavailable_checked": [],
       "cfd_proxy_balance_gbp": 1001.15,
       "cfd_proxy_open_positions": 0
+    },
+    {
+      "utc": "2026-11-03T19:12:20.749411+00:00",
+      "universe_size": 18,
+      "us_market_hours": true,
+      "uk_market_hours": false,
+      "forex_market_hours": true,
+      "uk_feed_status": "outside_uk_session",
+      "checked": [
+        "MSFT",
+        "EUR/USD",
+        "GBP/USD",
+        "INO",
+        "XOM",
+        "CAT",
+        "UNH",
+        "COST"
+      ],
+      "outcomes": {
+        "MSFT": "position_monitored",
+        "EUR/USD": "position_monitored",
+        "GBP/USD": "fx_no_breakout",
+        "INO": "trend_not_confirmed",
+        "XOM": "trend_not_confirmed",
+        "CAT": "trend_not_confirmed",
+        "UNH": "no_15bar_breakout",
+        "COST": "trend_not_confirmed"
+      },
+      "new_paper_entries": [],
+      "cfd_proxy_outcomes": {},
+      "early_watch": [],
+      "entries_today": 3,
+      "realized_pnl_today_gbp": -1.79,
+      "fresh_checked": [
+        "MSFT",
+        "EUR/USD",
+        "GBP/USD",
+        "INO",
+        "XOM",
+        "CAT",
+        "UNH",
+        "COST"
+      ],
+      "stale_or_unavailable_checked": [],
+      "cfd_proxy_balance_gbp": 1001.15,
+      "cfd_proxy_open_positions": 0
     }
   ],
   "uk_feed_status": "outside_uk_session",
@@ -3954,7 +3963,7 @@
     "execution": "SIMULATED_ONLY_NO_LEVERAGE_NO_BROKER_ORDERS",
     "separate_research_account": true,
     "starting_balance_gbp": 1000.0,
-    "latest_scan_utc": "2026-11-03T18:54:19.750700+00:00"
+    "latest_scan_utc": "2026-11-03T19:12:20.749411+00:00"
   },
   "user_paper_request": {
     "ticker": "INO",
