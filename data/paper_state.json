@@ -448,16 +448,16 @@
       "is_fresh": false
     },
     "GBP/USD": {
-      "date": "2026-11-03T14:00:00+00:00",
-      "close_usd": 1.34154,
+      "date": "2026-11-03T14:20:00+00:00",
+      "close_usd": 1.34206,
       "currency": "USD",
       "asset_class": "forex",
       "source": "Twelve Data 5-minute forex (indicative mid)",
       "is_fresh": true
     },
     "EUR/USD": {
-      "date": "2026-11-03T14:00:00+00:00",
-      "close_usd": 1.11839,
+      "date": "2026-11-03T14:20:00+00:00",
+      "close_usd": 1.119,
       "currency": "USD",
       "asset_class": "forex",
       "source": "Twelve Data 5-minute forex (indicative mid)",
@@ -483,7 +483,7 @@
     "2026-11-02T17:25:00+00:00 COST opened virtual long (5m)",
     "2026-11-02T19:15:00+00:00 COST closed early_profit_bank"
   ],
-  "updated_utc": "2026-11-03T14:10:11.602664+00:00",
+  "updated_utc": "2026-11-03T14:28:20.752582+00:00",
   "model": "Educational intraday 5-minute paper simulator; Twelve Data US limited-venue feed and optional licensed UK intraday feed, plus indicative forex mid prices. Proxy fills at observed candle closes; no live broker execution.",
   "assumptions": {
     "usd_per_gbp_fixed": 1.33,
@@ -557,15 +557,15 @@
     "UNH": 1793648700,
     "JNJ": 1793202300,
     "LLY": 1793202300,
-    "GBP/USD": 1793714400,
-    "EUR/USD": 1793714400,
+    "GBP/USD": 1793715600,
+    "EUR/USD": 1793715600,
     "INO": 1793652000
   },
   "run_event": "watchdog",
-  "run_id": "41651013281",
+  "run_id": "41653978461",
   "market_session_open": true,
   "scan_diagnostics": {
-    "utc": "2026-11-03T14:10:11.602664+00:00",
+    "utc": "2026-11-03T14:28:20.752582+00:00",
     "universe_size": 18,
     "us_market_hours": false,
     "uk_market_hours": true,
@@ -576,8 +576,8 @@
       "EUR/USD"
     ],
     "outcomes": {
-      "GBP/USD": "fx_trend_not_confirmed",
-      "EUR/USD": "fx_trend_not_confirmed"
+      "GBP/USD": "fx_no_breakout",
+      "EUR/USD": "fx_no_breakout"
     },
     "new_paper_entries": [],
     "cfd_proxy_outcomes": {},
@@ -593,29 +593,6 @@
     "cfd_proxy_open_positions": 0
   },
   "scan_history": [
-    {
-      "utc": "2026-10-28T18:00:51.642583+00:00",
-      "universe_size": 16,
-      "checked": [
-        "XOM",
-        "CAT",
-        "PLTR",
-        "MU",
-        "CRWD",
-        "JPM",
-        "UNH"
-      ],
-      "outcomes": {
-        "XOM": "position_monitored",
-        "CAT": "position_monitored",
-        "PLTR": "trend_not_confirmed",
-        "MU": "trend_not_confirmed",
-        "CRWD": "trend_not_confirmed",
-        "JPM": "no_20bar_breakout",
-        "UNH": "trend_not_confirmed"
-      },
-      "new_paper_entries": []
-    },
     {
       "utc": "2026-10-28T18:18:57.841585+00:00",
       "universe_size": 16,
@@ -3553,6 +3530,34 @@
       "stale_or_unavailable_checked": [],
       "cfd_proxy_balance_gbp": 1001.15,
       "cfd_proxy_open_positions": 0
+    },
+    {
+      "utc": "2026-11-03T14:28:20.752582+00:00",
+      "universe_size": 18,
+      "us_market_hours": false,
+      "uk_market_hours": true,
+      "forex_market_hours": true,
+      "uk_feed_status": "awaiting_live_uk_data_entitlement",
+      "checked": [
+        "GBP/USD",
+        "EUR/USD"
+      ],
+      "outcomes": {
+        "GBP/USD": "fx_no_breakout",
+        "EUR/USD": "fx_no_breakout"
+      },
+      "new_paper_entries": [],
+      "cfd_proxy_outcomes": {},
+      "early_watch": [],
+      "entries_today": 0,
+      "realized_pnl_today_gbp": 0,
+      "fresh_checked": [
+        "GBP/USD",
+        "EUR/USD"
+      ],
+      "stale_or_unavailable_checked": [],
+      "cfd_proxy_balance_gbp": 1001.15,
+      "cfd_proxy_open_positions": 0
     }
   ],
   "uk_feed_status": "awaiting_live_uk_data_entitlement",
@@ -3617,7 +3622,7 @@
     "execution": "SIMULATED_ONLY_NO_LEVERAGE_NO_BROKER_ORDERS",
     "separate_research_account": true,
     "starting_balance_gbp": 1000.0,
-    "latest_scan_utc": "2026-11-03T14:10:11.602664+00:00"
+    "latest_scan_utc": "2026-11-03T14:28:20.752582+00:00"
   },
   "user_paper_request": {
     "ticker": "INO",
