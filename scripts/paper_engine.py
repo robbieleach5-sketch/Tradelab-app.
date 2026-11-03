@@ -99,7 +99,7 @@ STATE = Path("data/paper_state.json")
 RISK_GBP = 25.0  # Planned risk per paper entry; gaps and fees can exceed it.
 START_GBP = 1000.0
 STOP_PCT = 0.01
-TARGET_PCT = 0.015
+TARGET_PCT = 0.02  # Paper target >= 2x the fixed 1% stop; still not guaranteed.
 # Early cash-out on a fresh completed 5-minute equity candle (+0.6% gross).
 # Protective stop or original target always gets priority if touched first.
 EQUITY_PROFIT_BANK_PCT = 0.006
@@ -362,11 +362,13 @@ def assess_early_warning(completed):
     }
 
 def assess_breakout(completed):
-    """Identify why a new 5-minute paper entry is rejected.
+    """Conservative research-only confirmed breakout on completed five-minute bars.
 
-    Retain the long-term trend, positive volume and 0.5% anti-chase checks.
-    A 15-bar breakout and 1.35x volume are exploratory, not validated edge.
+    Requires a 15-bar high break, 2x relative volume, strong closing candle,
+    price above session VWAP, and a 2:1 fixed target-to-stop ratio.
+    These filters are hypotheses for forward paper testing, not a proven edge.
     """
+    from zoneinfo import ZoneInfo
     previous = completed[:-1]
     if len(previous) < 50:
         return False, "insufficient_history"
@@ -382,12 +384,34 @@ def assess_breakout(completed):
     if bar["close"] <= breakout_level:
         return False, "no_15bar_breakout"
     avg_volume = sum(volumes) / 20
-    if bar["volume"] < 1.35 * avg_volume:
+    if bar["volume"] < 2.0 * avg_volume:
         return False, "insufficient_breakout_volume"
     if bar["close"] > breakout_level * 1.005:
         return False, "breakout_too_extended"
-    return True, "qualified_breakout"
-
+    candle_range = bar["high"] - bar["low"]
+    if candle_range <= 0 or (bar["close"] - bar["low"]) / candle_range < 0.75:
+        return False, "weak_breakout_candle"
+    if TARGET_PCT < 2.0 * STOP_PCT:
+        return False, "reward_risk_below_2"
+    # A valid session VWAP must use same-day bars, not yesterday's prices.
+    # US equities use NY trading dates; UK equities use London dates.
+    ticker_tz = ZoneInfo("America/New_York")
+    try:
+        session_date = datetime.fromtimestamp(bar["timestamp"], timezone.utc).astimezone(ticker_tz).date()
+        session_bars = [
+            b for b in completed
+            if datetime.fromtimestamp(b["timestamp"], timezone.utc).astimezone(ticker_tz).date() == session_date
+        ]
+        # At least three completed bars after opening; no stale VWAP carry-over.
+        if len(session_bars) < 3 or any(b.get("volume", 0) <= 0 for b in session_bars):
+            return False, "insufficient_session_vwap"
+        total_volume = sum(b["volume"] for b in session_bars)
+        vwap = sum(((b["high"] + b["low"] + b["close"]) / 3) * b["volume"] for b in session_bars) / total_volume
+    except (KeyError, TypeError, ValueError, ZeroDivisionError, OverflowError):
+        return False, "invalid_session_vwap"
+    if bar["close"] <= vwap:
+        return False, "below_session_vwap"
+    return True, "qualified_breakout_2x_volume_vwap_2r"
 
 def assess_forex_breakout(completed):
     """Exploratory FX momentum breakout without fabricated spot-FX volume."""
