@@ -69,6 +69,14 @@ jobs:
                   updated = updated.replace(tzinfo=timezone.utc)
               return max(0, (now - updated).total_seconds())
 
+          # A cron event can arrive hours away from its scheduled slot. Do not
+          # occupy a 5-hour Actions runner overnight; it would terminate
+          # before the UK session and leave a false impression of coverage.
+          first_uk = datetime.now(timezone.utc).astimezone(uk_tz)
+          if (first_uk.weekday() >= 5 or first_uk.time() < clock(8, 5)
+                  or first_uk.time() >= clock(21, 0)):
+              print('Outside UK/US paper-session window; watchdog exits cleanly.', flush=True)
+              sys.exit(0)
           print('Watchdog active: only scans the simulated portfolio; no broker orders.', flush=True)
           # One-time smoke test on watchdog code updates: prove the GitHub
           # Actions token can start the primary workflow without a human.
