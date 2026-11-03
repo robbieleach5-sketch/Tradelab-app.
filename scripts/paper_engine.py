@@ -361,7 +361,7 @@ def assess_early_warning(completed):
         "volume_multiple": round(volume / (sum(volumes) / len(volumes)), 2),
     }
 
-def assess_breakout(completed):
+def assess_breakout(completed, market="US"):
     """Conservative research-only confirmed breakout on completed five-minute bars.
 
     Requires a 15-bar high break, 2x relative volume, strong closing candle,
@@ -395,7 +395,7 @@ def assess_breakout(completed):
         return False, "reward_risk_below_2"
     # A valid session VWAP must use same-day bars, not yesterday's prices.
     # US equities use NY trading dates; UK equities use London dates.
-    ticker_tz = ZoneInfo("America/New_York")
+    ticker_tz = ZoneInfo("Europe/London" if market == "UK" else "America/New_York")
     try:
         session_date = datetime.fromtimestamp(bar["timestamp"], timezone.utc).astimezone(ticker_tz).date()
         session_bars = [
@@ -750,7 +750,7 @@ def main(now=None):
                 eligible, reason = (
                     assess_forex_breakout(completed) if market == "FX"
                     else assess_ino_opening_breakout(completed, now) if ticker == INO_PAPER_TICKER
-                    else assess_breakout(completed)
+                    else assess_breakout(completed, market=market)
                 )
                 # Re-check limits after every entry/exit in this scan.
                 entries_today, realized_today, traded_today = daily_limits(state, ny.date())
