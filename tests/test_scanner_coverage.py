@@ -87,7 +87,7 @@ class TestRiskParametersUnchanged(unittest.TestCase):
         self.assertEqual(paper_engine.MAX_POSITION_GBP, 2500)
         self.assertEqual(paper_engine.MAX_OPEN_POSITIONS, 4)
         self.assertEqual(paper_engine.STOP_PCT, 0.01)
-        self.assertEqual(paper_engine.TARGET_PCT, 0.015)
+        self.assertEqual(paper_engine.TARGET_PCT, 0.02)  # Draft 2R hypothesis
 
 
 if __name__ == "__main__":

@@ -119,16 +119,26 @@ class TestFocusedScanner(unittest.TestCase):
 
     @staticmethod
     def rising_bars():
+        # Use full same-session OHLCV history for candle and VWAP filters.
         bars = []
+        start = datetime(2026, 10, 29, 14, 30, tzinfo=timezone.utc)
         for minute in range(50):
             close = 100 + minute * 0.01
-            bars.append({"close": close, "high": close + 0.03, "volume": 100})
-        bars.append({"close": 100.60, "high": 100.61, "volume": 200})
+            bars.append({
+                "timestamp": int((start + timedelta(minutes=5 * minute)).timestamp()),
+                "open": close - 0.02, "close": close,
+                "high": close + 0.03, "low": close - 0.04, "volume": 100
+            })
+        bars.append({
+            "timestamp": int((start + timedelta(minutes=250)).timestamp()),
+            "open": 100.53, "close": 100.60,
+            "high": 100.61, "low": 100.51, "volume": 220
+        })
         return bars
 
     def test_only_confirmed_and_not_extended_breakouts_qualify(self):
         bars = self.rising_bars()
-        self.assertEqual(paper_engine.assess_breakout(bars), (True, "qualified_breakout"))
+        self.assertEqual(paper_engine.assess_breakout(bars), (True, "qualified_breakout_2x_volume_vwap_2r"))
         bars[-1]["close"] = 101.5
         self.assertEqual(paper_engine.assess_breakout(bars),
                          (False, "breakout_too_extended"))
@@ -151,7 +161,7 @@ class TestFocusedScanner(unittest.TestCase):
 class TestSmallerWinsConfiguration(unittest.TestCase):
     def test_smaller_targets_and_capital_per_trade(self):
         self.assertEqual(paper_engine.STOP_PCT, 0.01)
-        self.assertEqual(paper_engine.TARGET_PCT, 0.015)
+        self.assertEqual(paper_engine.TARGET_PCT, 0.02)
         self.assertEqual(paper_engine.MAX_POSITION_GBP, 2500.0)
         self.assertEqual(paper_engine.RISK_GBP, 25.0)
         self.assertEqual(paper_engine.DAILY_LOSS_LIMIT_GBP, 100.0)
@@ -165,12 +175,14 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
         self.assertEqual(len(scan), 8)
         self.assertEqual(len(set(scan)), 8)
 
-    def test_volume_filter_is_moderately_more_permissive(self):
+    def test_volume_filter_requires_double_baseline_volume(self):
         bars = TestFocusedScanner.rising_bars()
-        bars[-1]["volume"] = 140
-        self.assertEqual(paper_engine.assess_breakout(bars), (True, "qualified_breakout"))
-        bars[-1]["volume"] = 120
-        self.assertEqual(paper_engine.assess_breakout(bars), (False, "insufficient_breakout_volume"))
+        bars[-1]["volume"] = 210
+        self.assertEqual(paper_engine.assess_breakout(bars),
+                         (True, "qualified_breakout_2x_volume_vwap_2r"))
+        bars[-1]["volume"] = 190
+        self.assertEqual(paper_engine.assess_breakout(bars),
+                         (False, "insufficient_breakout_volume"))
 
     def test_daily_limits_count_entries_and_closed_losses(self):
         from zoneinfo import ZoneInfo
@@ -209,7 +221,7 @@ class TestSmallerWinsConfiguration(unittest.TestCase):
                 self.assertLessEqual(
                     position["entry_usd"] * position["qty"] / paper_engine.USD_PER_GBP, 2500.01
                 )
-                self.assertAlmostEqual(position["target_usd"] / position["entry_usd"], 1.015, places=4)
+                self.assertAlmostEqual(position["target_usd"] / position["entry_usd"], 1.02, places=4)
 
 
 
@@ -249,7 +261,7 @@ class TestOptionalUKMarket(unittest.TestCase):
             self.assertEqual(pos["currency"], "GBP")
             self.assertLessEqual(pos["qty"] * pos["entry_usd"], 2500.01)
             self.assertAlmostEqual(pos["stop_usd"], 9.9, places=4)
-            self.assertAlmostEqual(pos["target_usd"], 10.15, places=4)
+            self.assertAlmostEqual(pos["target_usd"], 10.2, places=4)
             prices.assert_called_once_with("SHEL", market="UK")
 
     def test_lse_currency_validation_and_gbx_conversion(self):
