@@ -11,13 +11,13 @@ on:
   # Code changes run unit tests separately. Never fetch market prices just
   # because a developer edited a file: Twelve Data limits credits/minute.
   schedule:
-    # Fifteen-minute weekday checks: off-peak minutes reduce congestion.
+    # Ten-minute weekday checks; shared throttle bounds all trigger sources.
     # UK time guard in the job starts status checks after 08:00 year-round.
     # GitHub schedule delivery is best-effort and may be delayed or dropped.
     # Off-peak minute offsets also re-register the scheduler after missed runs.
     # 07:00 UTC covers 08:00 BST, and 08:00 UTC covers 08:00 GMT.
-    # The first planned scan after the UK open is about 08:09 local time.
-    - cron: '9,24,39,54 7-21 * * 1-5'
+    # The first planned scan after the UK open is about 08:06 local time.
+    - cron: '6,16,26,36,46,56 7-21 * * 1-5'
 permissions:
   contents: write
 concurrency:
@@ -80,7 +80,8 @@ jobs:
               age = timedelta(days=1)
           # Two 7-8 credit requests within a minute can exceed free limits.
           # Never claim an extra scan happened if this job skipped fetching.
-          scan = age >= timedelta(minutes=3)
+          # At most six eight-credit scans/hour, including backup/manual runs.
+          scan = age >= timedelta(minutes=10)
           print(f'run={str(scan).lower()}')
           print(f'last_snapshot_age_minutes={age.total_seconds()/60:.1f}')
           PY
@@ -155,3 +156,4 @@ jobs:
           else:
               print('Standby verified: no active licensed market feed requested')
           PY
+
