@@ -90,6 +90,9 @@ CANDIDATES_PER_SCAN = 5
 MAX_API_SYMBOLS_PER_SCAN = 8
 MAX_OPEN_POSITIONS = 4
 MAX_POSITION_GBP = 2500.0  # Paper-only exposure cap after the £10,000 virtual funding test.
+MAX_POSITION_BALANCE_FRACTION = 0.25
+MAX_ENTRIES_PER_SYMBOL = 2
+REENTRY_COOLDOWN_MINUTES = 30
 # Trim only oversized pre-existing positions, and only at a verified fresh
 # completed market candle. Preserve their stop/target for the remaining qty.
 LEGACY_POSITION_CAP_GBP = 200.0
@@ -552,6 +555,25 @@ def daily_limits(state, session_day):
     return len(today_closed_entries) + len(today_open_entries), round(realized, 2), traded_today
 
 
+def reentry_block_reason(state, ticker, bar_time):
+    """Allow a fresh signal after cooldown; never replay a pre-exit candle."""
+    closed = [t for t in state.get("trades", []) if t.get("ticker") == ticker]
+    entries = {t.get("entry_date") for t in closed
+               if ny_trade_date(t.get("entry_date")) == ny_trade_date(bar_time.isoformat())}
+    if len(entries) >= MAX_ENTRIES_PER_SYMBOL:
+        return "symbol_daily_entry_limit"
+    for trade in closed:
+        try:
+            exited = datetime.fromisoformat(trade["exit_date"])
+            if exited.tzinfo is None:
+                exited = exited.replace(tzinfo=timezone.utc)
+            if (bar_time - exited).total_seconds() < REENTRY_COOLDOWN_MINUTES * 60:
+                return "reentry_cooldown"
+        except (ValueError, TypeError, KeyError):
+            return "unverified_previous_exit"
+    return None
+
+
 
 def publish_capital_summary(state):
     """Separate virtual deposits from actual historical simulated trade P/L."""
@@ -736,8 +758,8 @@ def main(now=None):
                     reason = "daily_entry_limit"
                 elif eligible and realized_today <= -DAILY_LOSS_LIMIT_GBP:
                     reason = "daily_loss_limit"
-                elif eligible and ticker in traded_today:
-                    reason = "already_traded_this_session"
+                elif eligible and reentry_block_reason(state, ticker, bar_time):
+                    reason = reentry_block_reason(state, ticker, bar_time)
                 elif eligible:
                     entry = bar["close"]
                     stop_pct = FX_STOP_PCT if market == "FX" else STOP_PCT
@@ -749,7 +771,11 @@ def main(now=None):
                         p["entry_usd"] * p["qty"] / (1.0 if p.get("currency") == "GBP" else USD_PER_GBP)
                         for p in state["positions"].values())
                     available = max(0, state["cash_gbp"] - reserved)
-                    qty = round(max(0, min(risk_qty, min(available, MAX_POSITION_GBP)*fx/entry)), 5)
+                    position_cap = min(MAX_POSITION_GBP,
+                                       state["cash_gbp"] * MAX_POSITION_BALANCE_FRACTION)
+                    # Round down so sizing cannot reserve more than available cash.
+                    from math import floor
+                    qty = floor(max(0, min(risk_qty, min(available, position_cap)*fx/entry)) * 100000) / 100000
                     if qty > 0:
                         state["positions"][ticker] = {"date": bar_time.isoformat(),
                             "entry_usd": entry, "stop_usd": round(stop, 5 if market == "FX" else 4),
@@ -819,6 +845,9 @@ def main(now=None):
     state["assumptions"] = {"usd_per_gbp_fixed": USD_PER_GBP, "max_risk_gbp": RISK_GBP,
                             "stop_pct": STOP_PCT*100, "target_pct": TARGET_PCT*100,
                             "max_position_gbp": MAX_POSITION_GBP,
+                            "max_position_balance_pct": MAX_POSITION_BALANCE_FRACTION * 100,
+                            "max_entries_per_symbol": MAX_ENTRIES_PER_SYMBOL,
+                            "reentry_cooldown_minutes": REENTRY_COOLDOWN_MINUTES,
                             "legacy_position_trim_cap_gbp": LEGACY_POSITION_CAP_GBP,
                             "max_open_positions": MAX_OPEN_POSITIONS,
                             "max_daily_entries": MAX_DAILY_ENTRIES,
@@ -841,3 +870,4 @@ def main(now=None):
 
 if __name__ == "__main__":
     main()
+
