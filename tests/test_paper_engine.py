@@ -148,6 +148,44 @@ class TestFocusedScanner(unittest.TestCase):
 
 
 
+class TestSmallPositionReentry(unittest.TestCase):
+    def test_four_qualified_positions_share_1000_balance(self):
+        now = datetime(2026, 11, 6, 16, tzinfo=timezone.utc)
+        bars = [{"timestamp": int((now - timedelta(minutes=10)).timestamp()),
+                 "close": 100, "open": 100, "low": 99, "high": 101, "volume": 200}]
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state.json"
+            path.write_text(json.dumps({"cash_gbp": 1000, "positions": {}, "trades": []}))
+            with patch.object(paper_engine, "STATE", path), \
+                 patch.dict(os.environ, {"TWELVE_DATA_API_KEY": "fake"}), \
+                 patch.object(paper_engine, "select_active_watchlist", return_value=["AAPL", "MSFT", "CAT", "XOM"]), \
+                 patch.object(paper_engine, "intraday_prices", return_value=bars), \
+                 patch.object(paper_engine, "assess_breakout", return_value=(True, "qualified_breakout")):
+                paper_engine.main(now=now)
+            state = json.loads(path.read_text())
+            self.assertEqual(len(state["positions"]), 4)
+            amounts = [p["qty"] * p["entry_usd"] / USD_PER_GBP for p in state["positions"].values()]
+            self.assertTrue(all(249.99 <= amount <= 250 for amount in amounts))
+            self.assertLessEqual(sum(amounts), 1000)
+
+    def test_cooldown_and_two_entry_limit(self):
+        now = datetime(2026, 11, 6, 16, tzinfo=timezone.utc)
+        state = {"trades": [{"ticker": "AAPL", "entry_date": "2026-11-06T14:40:00+00:00",
+                             "exit_date": "2026-11-06T15:30:00+00:00"}]}
+        self.assertEqual(paper_engine.reentry_block_reason(state, "AAPL", now - timedelta(minutes=1)), "reentry_cooldown")
+        self.assertIsNone(paper_engine.reentry_block_reason(state, "AAPL", now))
+        state["trades"].append({"ticker": "AAPL", "entry_date": now.isoformat(),
+                                "exit_date": (now + timedelta(minutes=20)).isoformat()})
+        self.assertEqual(paper_engine.reentry_block_reason(state, "AAPL", now + timedelta(hours=1)), "symbol_daily_entry_limit")
+
+    def test_overnight_exit_still_requires_cooldown(self):
+        now = datetime(2026, 11, 6, 14, 40, tzinfo=timezone.utc)
+        state = {"trades": [{"ticker": "AAPL", "entry_date": "2026-11-05T19:00:00+00:00",
+                             "exit_date": "2026-11-06T14:35:00+00:00"}]}
+        self.assertEqual(paper_engine.reentry_block_reason(state, "AAPL", now), "reentry_cooldown")
+        self.assertIsNone(paper_engine.reentry_block_reason(state, "MSFT", now))
+
+
 class TestSmallerWinsConfiguration(unittest.TestCase):
     def test_smaller_targets_and_capital_per_trade(self):
         self.assertEqual(paper_engine.STOP_PCT, 0.01)
@@ -567,3 +605,4 @@ class TestActionsScriptStartup(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
