@@ -104,7 +104,7 @@ jobs:
               elapsed = time.monotonic()
               # Allow time for the existing workflow to start, fetch prices and publish.
               # Avoid duplicate API requests when ordinary scheduled scans work.
-              if age > 17 * 60 and elapsed - last_request >= 7 * 60:
+              if age > 10 * 60 and elapsed - last_request >= 7 * 60:
                   try:
                       dispatch(endpoint, 'watchdog')
                       last_request = elapsed
@@ -128,3 +128,4 @@ jobs:
                   print('Watchdog handoff failed: ' + str(exc), flush=True)
                   sys.exit(1)
           PY
+
