@@ -18,6 +18,8 @@ on:
     # 07:00 UTC covers 08:00 BST, and 08:00 UTC covers 08:00 GMT.
     # The first planned scan after the UK open is about 08:06 local time.
     - cron: '6,16,26,36,46,56 7-21 * * 1-5'
+    # Extra 5m checks for Alpaca; Twelve Data retains its 10m throttle.
+    - cron: '1,11,21,31,41,51 13-20 * * 1-5'
 permissions:
   contents: write
 concurrency:
@@ -64,10 +66,13 @@ jobs:
           git checkout -B main origin/main
       - name: Prevent duplicate API scans during the provider cooldown
         id: throttle
+        env:
+          TRADELAB_US_DATA_PROVIDER: ${{ vars.TRADELAB_US_DATA_PROVIDER }}
         if: steps.window.outputs.run == 'true'
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
+          import json, os
+          from zoneinfo import ZoneInfo
           from pathlib import Path
           from datetime import datetime, timezone, timedelta
           try:
@@ -81,7 +86,11 @@ jobs:
           # Two 7-8 credit requests within a minute can exceed free limits.
           # Never claim an extra scan happened if this job skipped fetching.
           # At most six eight-credit scans/hour, including backup/manual runs.
-          scan = age >= timedelta(minutes=10)
+          ny = datetime.now(timezone.utc).astimezone(ZoneInfo("America/New_York"))
+          alpaca = os.environ.get("TRADELAB_US_DATA_PROVIDER", "").lower() == "alpaca"
+          us_session = ny.weekday() < 5 and (9, 35) <= (ny.hour, ny.minute) < (16, 0)
+          interval = 5 if alpaca and us_session else 10
+          scan = age >= timedelta(minutes=interval)
           print(f'run={str(scan).lower()}')
           print(f'last_snapshot_age_minutes={age.total_seconds()/60:.1f}')
           PY
@@ -93,6 +102,9 @@ jobs:
         if: steps.window.outputs.run == 'true' && steps.throttle.outputs.run == 'true'
         env:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          TRADELAB_US_DATA_PROVIDER: ${{ vars.TRADELAB_US_DATA_PROVIDER }}
           TRADELAB_UK_INTRADAY_ENABLED: ${{ vars.TRADELAB_UK_INTRADAY_ENABLED }}
           TRADELAB_FX_ENABLED: ${{ vars.TRADELAB_FX_ENABLED }}
           TRADELAB_TRIGGER: ${{ inputs.origin }}
@@ -156,4 +168,5 @@ jobs:
           else:
               print('Standby verified: no active licensed market feed requested')
           PY
+
 
