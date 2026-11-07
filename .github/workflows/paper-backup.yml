@@ -61,11 +61,10 @@ jobs:
         if: steps.stale.outputs.run == 'true'
         env:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          TRADELAB_US_DATA_PROVIDER: ${{ vars.TRADELAB_US_DATA_PROVIDER }}
         run: |
-          if [ -z "$TWELVE_DATA_API_KEY" ]; then
-            echo "::error::Missing TWELVE_DATA_API_KEY secret"
-            exit 1
-          fi
           python scripts/paper_engine.py
       - name: Publish catch-up paper snapshot
         if: steps.stale.outputs.run == 'true'
@@ -90,3 +89,4 @@ jobs:
             echo "Unable to publish backup portfolio snapshot"
             exit 1
           fi
+

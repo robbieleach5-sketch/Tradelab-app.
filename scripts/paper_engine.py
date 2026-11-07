@@ -4,9 +4,9 @@ import json, os, urllib.request, urllib.parse
 # Works both as python scripts/paper_engine.py in Actions and as
 # a package import under unittest.
 if __package__:
-    from . import cfd_proxy_paper
+    from . import cfd_proxy_paper, alpaca_data
 else:
-    import cfd_proxy_paper
+    import cfd_proxy_paper, alpaca_data
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -137,6 +137,13 @@ def mark_quote_freshness(quotes, now):
             quote["is_fresh"] = False
 
 
+def us_data_provider():
+    provider = os.environ.get("TRADELAB_US_DATA_PROVIDER", "").strip().lower() or "twelve"
+    if provider not in ("twelve", "alpaca"):
+        raise ValueError("TRADELAB_US_DATA_PROVIDER must be twelve or alpaca")
+    return provider
+
+
 def intraday_prices(ticker, market="US"):
     """Five-minute bars for US shares, or licensed LSE intraday UK shares.
 
@@ -146,6 +153,8 @@ def intraday_prices(ticker, market="US"):
     open a virtual trade.
     """
     from zoneinfo import ZoneInfo
+    if market == "US" and us_data_provider() == "alpaca":
+        return alpaca_data.prices(ticker)
     key = os.environ.get("TWELVE_DATA_API_KEY")
     if not key:
         raise RuntimeError("Missing GitHub Actions secret TWELVE_DATA_API_KEY")
@@ -658,15 +667,28 @@ def main(now=None):
     # Always clear old alerts, even when the scanner is in standby or has no feed.
     state["early_watchlist"] = []
     cfd_book = cfd_proxy_paper.initialize(state)
-    if not os.environ.get("TWELVE_DATA_API_KEY"):
-        state["errors"]["DATA_CONFIG"] = "Missing GitHub Actions secret TWELVE_DATA_API_KEY"
+    try:
+        provider = us_data_provider()
+        configured = (bool(os.environ.get("APCA_API_KEY_ID") and os.environ.get("APCA_API_SECRET_KEY"))
+                      if provider == "alpaca" else bool(os.environ.get("TWELVE_DATA_API_KEY")))
+        config_error = ("Missing APCA_API_KEY_ID or APCA_API_SECRET_KEY" if provider == "alpaca"
+                        else "Missing GitHub Actions secret TWELVE_DATA_API_KEY")
+    except ValueError as exc:
+        configured, config_error = False, str(exc)
+    if not configured:
+        state["errors"]["DATA_CONFIG"] = config_error
         state["updated_utc"] = now.isoformat()
-        state["model"] = "Twelve Data configuration required; trading paused"
+        state["model"] = "Market data configuration required; trading paused"
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text(json.dumps(state, indent=2)+"\n")
-        print("Twelve Data key not configured; no simulated trades placed")
+        print("Market data not configured; no simulated trades placed")
         return
     state["errors"].pop("DATA_CONFIG", None)
+    state["us_data_provider"] = provider
+    if not os.environ.get("TWELVE_DATA_API_KEY"):
+        fx_active = uk_active = False
+    state["us_feed_coverage"] = "IEX_ONLY" if provider == "alpaca" else "LIMITED_VENUE"
+
     state["uk_feed_status"] = ("active_market_hours" if uk_active else
                                "awaiting_live_uk_data_entitlement" if uk_hours and not uk_enabled else
                                "outside_uk_session")
@@ -715,6 +737,7 @@ def main(now=None):
                                        "asset_class": "forex" if market == "FX" else "equity",
                                        "source": "Twelve Data 5-minute forex (indicative mid)" if market == "FX"
                                                  else "Twelve Data 5-minute bars (LSE live entitlement)" if market == "UK"
+                                                 else "Alpaca IEX 5-minute bars (single exchange)" if provider == "alpaca"
                                                  else "Twelve Data 5-minute bars (limited-venue US feed)"}
             state["quotes"][ticker]["is_fresh"] = (
                 local_bar.date() == today_local and
@@ -845,7 +868,8 @@ def main(now=None):
     state["us_market_session_open"] = regular
     state["uk_market_session_open"] = uk_active
     state["forex_session_open"] = fx_active
-    state["model"] = ("Educational intraday 5-minute paper simulator; Twelve Data US limited-venue feed "
+    state["model"] = ("Educational intraday 5-minute paper simulator; "
+                      + ("Alpaca IEX US feed " if provider == "alpaca" else "Twelve Data US limited-venue feed ") +
                       "and optional licensed UK intraday feed, plus indicative forex mid prices. Proxy fills at observed candle closes; "
                       "no live broker execution.")
     state["assumptions"] = {"usd_per_gbp_fixed": USD_PER_GBP, "max_risk_gbp": RISK_GBP,
@@ -876,5 +900,6 @@ def main(now=None):
 
 if __name__ == "__main__":
     main()
+
 
 

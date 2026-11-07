@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'scripts/paper_engine.py'
+      - 'scripts/alpaca_data.py'
+      - 'tests/test_alpaca_data.py'
       - 'tests/test_paper_engine.py'
       - 'tests/test_cfd_proxy_paper.py'
       - 'scripts/cfd_proxy_paper.py'
@@ -11,6 +13,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/paper_engine.py'
+      - 'scripts/alpaca_data.py'
+      - 'tests/test_alpaca_data.py'
       - 'tests/test_paper_engine.py'
       - 'tests/test_cfd_proxy_paper.py'
       - 'scripts/cfd_proxy_paper.py'
@@ -29,3 +33,4 @@ jobs:
         run: |
           python -m py_compile scripts/paper_engine.py scripts/cfd_proxy_paper.py tests/test_paper_engine.py tests/test_cfd_proxy_paper.py
           python -m unittest discover -s tests -p 'test_*.py' -v
+
