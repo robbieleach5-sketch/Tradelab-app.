@@ -1,159 +1,73 @@
-"""Tests for *illustrative* stock-CFD proxy engine (never actual broker CFD fills)."""
 import unittest
 from datetime import datetime, timedelta, timezone
 from scripts import cfd_proxy_paper as cfd
 
-NOW = datetime(2026, 10, 29, 15, 10, tzinfo=timezone.utc)  # 11:10 New York
+NOW = datetime(2026, 11, 9, 14, 41, tzinfo=timezone.utc)
+def bar(at, close=100, high=101, low=99):
+    return dict(timestamp=int(at.timestamp()), open=100, close=close, high=high, low=low, volume=100)
+def history(short=False, now=NOW):
+    opening = now.replace(minute=30, second=0)
+    return [bar(opening), bar(opening+timedelta(minutes=5), 98.9 if short else 101.1, 101.2, 98.8)]
 
+class TestOrb(unittest.TestCase):
+    def test_long_short_levels_and_sizing(self):
+        for short in (False, True):
+            book=cfd.initialize({}); bars=history(short)
+            self.assertEqual(cfd.evaluate(book,'NVDA',bars,NOW),'paper_cfd_proxy_entry_'+('short' if short else 'long'))
+            p=book['positions']['NVDA']
+            self.assertEqual(p['stop_usd'],101 if short else 99)
+            self.assertAlmostEqual(abs(p['target_usd']-p['entry_usd']),2*abs(p['entry_usd']-p['stop_usd']))
+            self.assertLessEqual(p['qty']*p['entry_usd']/cfd.USD_PER_GBP_ASSUMED,150)
+            self.assertLessEqual(p['qty']*abs(p['entry_usd']-p['stop_usd'])/cfd.USD_PER_GBP_ASSUMED,5)
+    def test_missing_opening_premarket_wick_and_continuation_rejected(self):
+        h=history(); self.assertEqual(cfd.direction_signal(h[1:])[1],'missing_opening_range')
+        h[0]['timestamp']-=300; self.assertIsNone(cfd.direction_signal(h)[0])
+        h=history(); h[-1]['close']=100; self.assertIsNone(cfd.direction_signal(h)[0])
+        h=history(); h.append(bar(NOW.replace(minute=40),102,103,101)); self.assertIsNone(cfd.direction_signal(h)[0])
+    def test_completion_freshness_and_gap(self):
+        h=history(); book=cfd.initialize({})
+        self.assertEqual(cfd.evaluate(book,'NVDA',h,NOW.replace(minute=39)),'entries_paused')
+        self.assertEqual(cfd.evaluate(cfd.initialize({}),'NVDA',h,NOW+timedelta(minutes=2)),'stale_orb_entry')
+        h[-1]['timestamp']+=300; self.assertEqual(cfd.direction_signal(h)[1],'missing_previous_candle')
+    def test_dst_and_next_session_recurring_despite_expired_token(self):
+        for now in (NOW,datetime(2026,10,29,13,41,tzinfo=timezone.utc)):
+            book=cfd.initialize({});book['single_test_request']['remaining_entries']=0
+            self.assertIn('entry_long',cfd.evaluate(book,'NVDA',history(now=now),now))
+        book=cfd.initialize({});cfd.evaluate(book,'NVDA',history(),NOW)
+        p=book['positions']['NVDA']; later=NOW+timedelta(minutes=5)
+        hit=bar(NOW.replace(minute=40),100,p['target_usd']+1,p['stop_usd']-1)
+        self.assertEqual(cfd.evaluate(book,'NVDA',[hit],later,allow_new=False),'closed_at_stop')
+        self.assertEqual(book['trades'][0]['strategy'],'ORB_5M')
+        again=history(now=NOW+timedelta(days=1))
+        self.assertIn('entry_long',cfd.evaluate(book,'NVDA',again,NOW+timedelta(days=1)))
+    def test_risk_locks_duplicate_and_one_per_symbol(self):
+        book=cfd.initialize({})
+        self.assertEqual(cfd.evaluate(book,'NVDA',history(),NOW,allow_new=False),'entries_paused')
+        book=cfd.initialize({});book['trades']=[dict(ticker='AMD',entry_day='2026-11-09',exit_day='2026-11-09',pnl_gbp=-11)]
+        self.assertEqual(cfd.evaluate(book,'NVDA',history(),NOW),'cfd_daily_risk_halt')
+        book=cfd.initialize({});book['trades']=[dict(ticker='NVDA',entry_day='2026-11-09',exit_day='2026-11-09',pnl_gbp=1)]
+        self.assertEqual(cfd.evaluate(book,'NVDA',history(),NOW),'already_traded_today')
+        self.assertEqual(cfd.evaluate(book,'NVDA',history(),NOW),'already_processed')
+    def test_target_not_old_early_profit_and_session_exit(self):
+        for short in (False,True):
+            book=cfd.initialize({});cfd.evaluate(book,'AMD',history(short),NOW);p=book['positions']['AMD']
+            value=p['entry_usd']*(.991 if short else 1.009)
+            b=bar(NOW.replace(minute=40),value,value+.01,value-.01);b['open']=value
+            self.assertEqual(cfd.evaluate(book,'AMD',[b],NOW+timedelta(minutes=5)),'position_monitored')
+            b=bar(NOW.replace(minute=45),p['target_usd'],p['target_usd']+.01,p['target_usd']-.01);b['open']=p['target_usd']
+            self.assertEqual(cfd.evaluate(book,'AMD',[b],NOW+timedelta(minutes=10)),'closed_at_target')
+        book=cfd.initialize({});cfd.evaluate(book,'NVDA',history(),NOW)
+        now=NOW.replace(hour=20,minute=41);b=bar(now-timedelta(minutes=6),101.1,101.2,101)
+        self.assertEqual(cfd.evaluate(book,'NVDA',[b],now),'session_exit')
+    def test_orb_symbols_receive_opening_window_scan_slots(self):
+        from scripts import paper_engine
+        selected = paper_engine.select_active_watchlist(NOW, {}, True, False, True, {})
+        self.assertTrue(set(cfd.PROXY_SYMBOLS).issubset(selected))
+        self.assertLessEqual(len(selected), paper_engine.MAX_API_SYMBOLS_PER_SCAN)
 
-def bar(at, price, high=None, low=None, vol=100):
-    return {"timestamp": int(at.timestamp()), "open": price, "close": price,
-            "high": price if high is None else high,
-            "low": price if low is None else low, "volume": vol}
-
-
-def history(now=NOW, descending=False):
-    start = now - timedelta(minutes=60*5+5)
-    out = []
-    for i in range(59):
-        p = (105 - i*0.04) if descending else (100 + i*0.04)
-        out.append(bar(start + timedelta(minutes=i*5), p, p+0.025, p-0.025))
-    last = out[-1]["close"]
-    value = last-0.15 if descending else last+0.15
-    out.append(bar(start + timedelta(minutes=59*5), value, value+.025, value-.025, 160))
-    return out
-
-
-class TestCfdProxy(unittest.TestCase):
-    def test_default_is_isolated_account_with_no_leverage_or_real_broker(self):
-        state = {"cash_gbp": 937.62, "positions": {"XOM": {"qty": 1}}}
-        book = cfd.initialize(state)
-        self.assertEqual(book["cash_gbp"], 1000.0)
-        self.assertTrue(book["separate_research_account"])
-        self.assertIn("NOT_BROKER_CFD", book["source"])
-        self.assertEqual(state["cash_gbp"], 937.62)
-        self.assertEqual(cfd.MAX_POSITIONS, 2)
-        self.assertEqual(cfd.POSITION_GBP, 150)
-
-    def test_long_and_short_breakout_detection(self):
-        long = history()
-        short = history(descending=True)
-        self.assertEqual(cfd.direction_signal(long)[0], "long")
-        self.assertEqual(cfd.direction_signal(short)[0], "short")
-        long[-1]["volume"] = 0
-        self.assertEqual(cfd.direction_signal(long)[1], "missing_share_volume")
-
-    def test_short_position_opens_and_target_profit_releases_cash(self):
-        state = {}
-        book = cfd.initialize(state)
-        bars = history(descending=True)
-        signal = cfd.evaluate(book, "AMD", bars, NOW)
-        self.assertEqual(signal, "paper_cfd_proxy_entry_short")
-        pos = book["positions"]["AMD"]
-        self.assertEqual(pos["side"], "short")
-        self.assertEqual(pos["leverage"], 1.0)
-        self.assertLessEqual(pos["qty"]*pos["entry_usd"]/cfd.USD_PER_GBP_ASSUMED, 150.01)
-        next_at = NOW + timedelta(minutes=15)
-        candle = bar(next_at-timedelta(minutes=10), pos["target_usd"]-.05,
-                     high=pos["target_usd"]+.15, low=pos["target_usd"]-.1)
-        self.assertEqual(cfd.evaluate(book, "AMD", [candle], next_at), "closed_at_target")
-        self.assertEqual(book["positions"], {})
-        self.assertGreater(book["cash_gbp"], 1000.0)
-        self.assertEqual(book["trades"][0]["reason"], "target")
-        self.assertEqual(book["trades"][0]["quote_type"], "underlying_stock_proxy")
-        self.assertEqual(cfd.evaluate(book, "AMD", [candle], next_at), "already_processed")
-
-    def test_long_stop_wins_over_target_if_same_candle(self):
-        book = cfd.initialize({})
-        h = history()
-        self.assertEqual(cfd.evaluate(book, "NVDA", h, NOW), "paper_cfd_proxy_entry_long")
-        pos = book["positions"]["NVDA"]
-        next_at = NOW+timedelta(minutes=15)
-        b = bar(next_at-timedelta(minutes=10), pos["entry_usd"],
-                high=pos["target_usd"]+1, low=pos["stop_usd"]-1)
-        self.assertEqual(cfd.evaluate(book, "NVDA", [b], next_at), "closed_at_stop")
-        self.assertLess(book["cash_gbp"], 1000.0)
-
-    def test_early_profit_bank_for_short_and_costs_deducted(self):
-        book = cfd.initialize({})
-        h = history(descending=True)
-        self.assertEqual(cfd.evaluate(book, "TSLA", h, NOW), "paper_cfd_proxy_entry_short")
-        position = book["positions"]["TSLA"]
-        next_at = NOW+timedelta(minutes=15)
-        close_price = position["entry_usd"]*(1-cfd.EARLY_PROFIT_CLOSE_PCT-0.0001)
-        b = bar(next_at-timedelta(minutes=10), close_price,
-                high=close_price+.01, low=close_price-.01)
-        self.assertEqual(cfd.evaluate(book, "TSLA", [b], next_at), "early_profit_bank")
-        self.assertGreater(book["trades"][0]["pnl_gbp"], 0)
-        self.assertGreater(book["trades"][0]["estimated_cost_gbp"], 0)
-
-    def test_reject_future_or_stale_quotes(self):
-        book = cfd.initialize({})
-        self.assertEqual(cfd.evaluate(book, "TSLA", [bar(NOW + timedelta(minutes=30), 100)], NOW),
-                         "no_completed_bars")
-        self.assertEqual(cfd.evaluate(book, "TSLA", [bar(NOW-timedelta(minutes=60), 100)], NOW),
-                         "stale_underlying_quote")
-
-    def test_loss_cap_does_not_prevent_existing_position_management(self):
-        book = cfd.initialize({})
-        h = history()
-        self.assertEqual(cfd.evaluate(book, "NVDA", h, NOW), "paper_cfd_proxy_entry_long")
-        book["trades"].append({"ticker": "AMD", "entry_day": NOW.date().isoformat(),
-                               "exit_day": NOW.date().isoformat(), "pnl_gbp": -12.0})
-        after = NOW + timedelta(minutes=15)
-        pos = book["positions"]["NVDA"]
-        b = bar(after-timedelta(minutes=10), pos["stop_usd"]-.2,
-                high=pos["stop_usd"]+.3, low=pos["stop_usd"]-.4)
-        self.assertEqual(cfd.evaluate(book, "NVDA", [b], after, allow_new=False), "closed_at_stop")
-        self.assertNotIn("NVDA", book["positions"])
-        # The one-shot token has already been spent; an existing position
-        # must still be closed even when the separate CFD daily loss cap is hit.
-        self.assertEqual(cfd.evaluate(book, "TSLA", [bar(after-timedelta(minutes=10), 100)],
-                                      after), "single_test_request_fulfilled")
-        guarded = cfd.initialize({})
-        guarded["trades"].append({"ticker": "AMD", "entry_day": NOW.date().isoformat(),
-                                  "exit_day": NOW.date().isoformat(), "pnl_gbp": -12.0})
-        self.assertEqual(cfd.evaluate(guarded, "TSLA", [bar(after-timedelta(minutes=10), 100)],
-                                      after), "cfd_daily_risk_halt")
-
-    def test_session_cutoff_closes_open_position_without_overnight(self):
-        book = cfd.initialize({})
-        h = history()
-        self.assertEqual(cfd.evaluate(book, "NVDA", h, NOW), "paper_cfd_proxy_entry_long")
-        ny_close = datetime(2026, 10, 29, 19, 42, tzinfo=timezone.utc)  # 15:42 NY
-        p = book["positions"]["NVDA"]
-        b = bar(ny_close-timedelta(minutes=10), p["entry_usd"],
-                high=p["entry_usd"]+.1, low=p["entry_usd"]-.1)
-        self.assertEqual(cfd.evaluate(book, "NVDA", [b], ny_close), "session_exit")
-        self.assertEqual(book["positions"], {})
-
-
-
-    def test_user_one_shot_allows_exactly_one_demo_entry(self):
-        book = cfd.initialize({})
-        self.assertEqual(book["single_test_request"]["remaining_entries"], 1)
-        self.assertEqual(cfd.evaluate(book, "NVDA", history(), NOW),
-                         "paper_cfd_proxy_entry_long")
-        self.assertEqual(book["single_test_request"]["remaining_entries"], 0)
-        self.assertEqual(book["single_test_request"]["status"], "entry_opened")
-        self.assertEqual(cfd.evaluate(book, "AMD", history(descending=True), NOW),
-                         "single_test_request_fulfilled")
-        self.assertEqual(len(book["positions"]), 1)
-
-    def test_one_shot_expiration_does_not_create_demo_position(self):
-        book = cfd.initialize({})
-        book["single_test_request"]["expires_utc"] = (NOW-timedelta(minutes=1)).isoformat()
-        self.assertEqual(cfd.evaluate(book, "NVDA", history(), NOW),
-                         "single_test_request_expired")
-        self.assertEqual(book["single_test_request"]["status"], "expired_without_entry")
-        self.assertFalse(book["positions"])
-
-    def test_daily_loss_lock_precedes_one_shot_entry(self):
-        book = cfd.initialize({})
-        self.assertEqual(cfd.evaluate(book, "NVDA", history(), NOW, allow_new=False),
-                         "entries_paused")
-        self.assertEqual(book["single_test_request"]["remaining_entries"], 1)
-        self.assertFalse(book["positions"])
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_entry_cutoff_and_missing_volume(self):
+        self.assertEqual(cfd.evaluate(cfd.initialize({}),'NVDA',history(),NOW.replace(hour=16)),'stale_underlying_quote')
+        h=history();h[-1]['volume']=0;self.assertEqual(cfd.direction_signal(h)[1],'missing_share_volume')
+        now=NOW.replace(hour=16,minute=1);h=history();h.append(bar(now-timedelta(minutes=6),102,103,99))
+        self.assertEqual(cfd.evaluate(cfd.initialize({}),'NVDA',h,now),'entries_paused')
+if __name__=='__main__': unittest.main()

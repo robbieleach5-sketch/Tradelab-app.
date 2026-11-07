@@ -286,6 +286,12 @@ def select_active_watchlist(now, positions, us_active, uk_active, fx_active=Fals
         symbol for symbol in cfd.get("positions", {})
         if symbol in cfd_proxy_paper.PROXY_SYMBOLS and symbol not in positions
     ] if us_active else []
+    # Check the ORB universe each opening-window scan within the same API budget.
+    from zoneinfo import ZoneInfo
+    ny_orb = now.astimezone(ZoneInfo("America/New_York"))
+    if us_active and (9, 35) <= (ny_orb.hour, ny_orb.minute) < (11, 0):
+        us_priority += [symbol for symbol in cfd_proxy_paper.PROXY_SYMBOLS
+                        if symbol not in positions and symbol not in us_priority]
     # Ensure the user-requested one-shot is checked every US scan while pending.
     # It occupies a normal API slot: the eight-credit budget is unchanged.
     special = ([INO_PAPER_TICKER] if us_active
@@ -870,4 +876,5 @@ def main(now=None):
 
 if __name__ == "__main__":
     main()
+
 

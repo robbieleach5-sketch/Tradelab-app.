@@ -39,6 +39,8 @@ def initialize(state):
         "remaining_entries": 1,
         "status": "pending_risk_and_signal",
     })
+    book["strategy"] = "ORB_5M"
+    book["entry_mode"] = "recurring_paper_sessions"
     book["source"] = "UNDERLYING_US_SHARE_PROXY_NOT_BROKER_CFD_QUOTE"
     book["execution"] = "SIMULATED_ONLY_NO_LEVERAGE_NO_BROKER_ORDERS"
     book["separate_research_account"] = True
@@ -46,26 +48,38 @@ def initialize(state):
     return book
 
 
+def opening_range(bars):
+    """Require the exact regular-session opening candle, never premarket."""
+    if not bars:
+        return None
+    day = datetime.fromtimestamp(bars[-1]["timestamp"], timezone.utc).astimezone(ZoneInfo("America/New_York")).date()
+    for bar in bars:
+        at = datetime.fromtimestamp(bar["timestamp"], timezone.utc).astimezone(ZoneInfo("America/New_York"))
+        if at.date() == day and (at.hour, at.minute, at.second) == (9, 30, 0):
+            if 0 < bar["low"] < bar["high"]:
+                return bar
+    return None
+
+
 def direction_signal(bars):
-    """Trend-following 5-minute long/short on verified volume and 12-bar break."""
-    before = bars[:-1]
-    if len(before) < 50:
-        return None, "insufficient_history"
+    """Five-minute ORB: fresh crossing on a completed regular-session bar."""
+    opening = opening_range(bars)
+    if opening is None:
+        return None, "missing_opening_range"
     bar = bars[-1]
-    vols = [float(c.get("volume") or 0) for c in before[-20:]]
-    if any(v <= 0 for v in vols) or float(bar.get("volume") or 0) <= 0:
+    at = datetime.fromtimestamp(bar["timestamp"], timezone.utc).astimezone(ZoneInfo("America/New_York"))
+    if at.weekday() >= 5 or not (9, 35) <= (at.hour, at.minute) < (10, 55):
+        return None, "outside_orb_entry_window"
+    if len(bars) < 2 or bars[-2]["timestamp"] != bar["timestamp"] - 300:
+        return None, "missing_previous_candle"
+    if float(bar.get("volume") or 0) <= 0 or float(opening.get("volume") or 0) <= 0:
         return None, "missing_share_volume"
-    if bar["volume"] < sum(vols) / 20 * 1.3:
-        return None, "weak_breakout_volume"
-    slow = sum(c["close"] for c in before[-50:]) / 50
-    fast = sum(c["close"] for c in before[-20:]) / 20
-    high = max(c["high"] for c in before[-12:])
-    low = min(c["low"] for c in before[-12:])
-    if fast > slow and high < bar["close"] <= high * 1.004:
-        return "long", "confirmed_long_breakout"
-    if fast < slow and low * 0.996 <= bar["close"] < low:
-        return "short", "confirmed_short_breakdown"
-    return None, "no_qualified_long_or_short_signal"
+    previous = bars[-2]["close"]
+    if previous <= opening["high"] < bar["close"]:
+        return "long", "orb_5m_long_breakout"
+    if previous >= opening["low"] > bar["close"]:
+        return "short", "orb_5m_short_breakout"
+    return None, "no_fresh_orb_breakout"
 
 
 def today_metrics(book, today):
@@ -97,6 +111,7 @@ def close(book, ticker, bar, reason):
     pnl = round(gross - fees, 2)
     book["cash_gbp"] = round(book["cash_gbp"] + pnl, 2)
     trade = {
+        "strategy": pos.get("strategy", "legacy_breakout"),
         "ticker": ticker, "side": side, "entry_day": pos["entry_day"],
         "exit_day": exit_day.isoformat(), "entry_usd": pos["entry_usd"],
         "exit_usd": mid_exit, "qty": pos["qty"], "pnl_gbp": pnl,
@@ -150,7 +165,7 @@ def evaluate(book, ticker, bars, now, *, allow_new=True):
                     close(book, ticker, b, "stop" if hit_stop else "target")
                     outcome = "closed_at_stop" if hit_stop else "closed_at_target"
                     break
-                if b["close"] >= entry * (1 + EARLY_PROFIT_CLOSE_PCT):
+                if old.get("strategy") != "ORB_5M" and b["close"] >= entry * (1 + EARLY_PROFIT_CLOSE_PCT):
                     close(book, ticker, b, "early_profit_bank")
                     outcome = "early_profit_bank"
                     break
@@ -166,7 +181,7 @@ def evaluate(book, ticker, bars, now, *, allow_new=True):
                     close(book, ticker, b, "stop" if hit_stop else "target")
                     outcome = "closed_at_stop" if hit_stop else "closed_at_target"
                     break
-                if b["close"] <= entry * (1 - EARLY_PROFIT_CLOSE_PCT):
+                if old.get("strategy") != "ORB_5M" and b["close"] <= entry * (1 - EARLY_PROFIT_CLOSE_PCT):
                     close(book, ticker, b, "early_profit_bank")
                     outcome = "early_profit_bank"
                     break
@@ -181,15 +196,11 @@ def evaluate(book, ticker, bars, now, *, allow_new=True):
     if latest["timestamp"] <= last_seen:
         return "already_processed"
     book["last_processed"][ticker] = latest["timestamp"]
-    if not allow_new or not (9, 45) <= (local.hour, local.minute) < (15, 0):
+    if not allow_new or not (9, 40) <= (local.hour, local.minute) < (11, 0):
         return "entries_paused"
-    request = book["single_test_request"]
-    if int(request.get("remaining_entries", 0)) <= 0:
-        return "single_test_request_fulfilled"
-    if now >= datetime.fromisoformat(request["expires_utc"]):
-        request["status"] = "expired_without_entry"
-        request["remaining_entries"] = 0
-        return "single_test_request_expired"
+    # Exits may catch up across missed scans; new entries must be timely.
+    if age.total_seconds() > 420:
+        return "stale_orb_entry"
     today = local.date().isoformat()
     count, realized, traded = today_metrics(book, today)
     if realized <= -LOSS_CUTOFF_GBP or count >= MAX_ENTRIES_DAY:
@@ -202,24 +213,28 @@ def evaluate(book, ticker, bars, now, *, allow_new=True):
     if not side:
         return reason
     entry = float(latest["close"])
-    stop = entry * (1 - STOP_PCT if side == "long" else 1 + STOP_PCT)
-    target = entry * (1 + TARGET_PCT if side == "long" else 1 - TARGET_PCT)
+    opening = opening_range(completed)
+    stop = float(opening["low"] if side == "long" else opening["high"])
+    distance = abs(entry - stop)
+    target = entry + 2 * distance if side == "long" else entry - 2 * distance
+    if target <= 0:
+        return "invalid_orb_target"
     reserved = sum(p["entry_usd"] * p["qty"] / USD_PER_GBP_ASSUMED
                    for p in book["positions"].values())
     available = max(0.0, book["cash_gbp"] - reserved)
     notional = min(POSITION_GBP, available)
-    qty = round(notional * USD_PER_GBP_ASSUMED / entry, 6)
+    from math import floor
+    # At most £5 gross stop risk, with the existing unleveraged £150 cap.
+    qty = floor(min(notional * USD_PER_GBP_ASSUMED / entry,
+                    5.0 * USD_PER_GBP_ASSUMED / distance) * 1e6) / 1e6
     if qty <= 0:
         return "insufficient_cash"
     book["positions"][ticker] = {
+        "strategy": "ORB_5M", "opening_high": opening["high"], "opening_low": opening["low"],
         "side": side, "entry_day": today, "entry_timestamp": latest["timestamp"],
         "entry_usd": entry, "stop_usd": round(stop, 5),
         "target_usd": round(target, 5), "qty": qty,
         "quote_type": "underlying_stock_proxy", "leverage": 1.0,
     }
-    request["remaining_entries"] = 0
-    request["status"] = "entry_opened"
-    request["ticker"] = ticker
-    request["side"] = side
-    request["entry_utc"] = datetime.fromtimestamp(latest["timestamp"], timezone.utc).isoformat()
     return "paper_cfd_proxy_entry_" + side
+
