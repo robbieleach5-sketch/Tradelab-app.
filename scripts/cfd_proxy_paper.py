@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 PROXY_SYMBOLS = ("NVDA", "TSLA", "AMD")
 START_BALANCE_GBP = 1000.0  # Separate research ledger, not added to the stock account.
 MAX_POSITIONS = 2
-POSITION_GBP = 150.0
+POSITION_GBP = 1000.0
 MAX_ENTRIES_DAY = 3
 LOSS_CUTOFF_GBP = 10.0
 STOP_PCT = 0.006
@@ -41,6 +41,8 @@ def initialize(state):
     })
     book["strategy"] = "ORB_5M"
     book["entry_mode"] = "recurring_paper_sessions"
+    book["position_value_gbp"] = POSITION_GBP
+    book["sizing_mode"] = "fixed_notional_skip_if_underfunded"
     book["source"] = "UNDERLYING_US_SHARE_PROXY_NOT_BROKER_CFD_QUOTE"
     book["execution"] = "SIMULATED_ONLY_NO_LEVERAGE_NO_BROKER_ORDERS"
     book["separate_research_account"] = True
@@ -222,11 +224,11 @@ def evaluate(book, ticker, bars, now, *, allow_new=True):
     reserved = sum(p["entry_usd"] * p["qty"] / USD_PER_GBP_ASSUMED
                    for p in book["positions"].values())
     available = max(0.0, book["cash_gbp"] - reserved)
-    notional = min(POSITION_GBP, available)
+    # Fixed user-requested position value; never silently downsize or borrow.
+    if available < POSITION_GBP:
+        return "insufficient_cash_for_fixed_position"
     from math import floor
-    # At most £5 gross stop risk, with the existing unleveraged £150 cap.
-    qty = floor(min(notional * USD_PER_GBP_ASSUMED / entry,
-                    5.0 * USD_PER_GBP_ASSUMED / distance) * 1e6) / 1e6
+    qty = floor(POSITION_GBP * USD_PER_GBP_ASSUMED / entry * 1e6) / 1e6
     if qty <= 0:
         return "insufficient_cash"
     book["positions"][ticker] = {
@@ -235,6 +237,9 @@ def evaluate(book, ticker, bars, now, *, allow_new=True):
         "entry_usd": entry, "stop_usd": round(stop, 5),
         "target_usd": round(target, 5), "qty": qty,
         "quote_type": "underlying_stock_proxy", "leverage": 1.0,
+        "requested_notional_gbp": POSITION_GBP,
+        "entry_notional_gbp": entry * qty / USD_PER_GBP_ASSUMED,
+        "planned_gross_stop_risk_gbp": distance * qty / USD_PER_GBP_ASSUMED,
     }
     return "paper_cfd_proxy_entry_" + side
 

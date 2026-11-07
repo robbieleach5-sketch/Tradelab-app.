@@ -17,8 +17,8 @@ class TestOrb(unittest.TestCase):
             p=book['positions']['NVDA']
             self.assertEqual(p['stop_usd'],101 if short else 99)
             self.assertAlmostEqual(abs(p['target_usd']-p['entry_usd']),2*abs(p['entry_usd']-p['stop_usd']))
-            self.assertLessEqual(p['qty']*p['entry_usd']/cfd.USD_PER_GBP_ASSUMED,150)
-            self.assertLessEqual(p['qty']*abs(p['entry_usd']-p['stop_usd'])/cfd.USD_PER_GBP_ASSUMED,5)
+            self.assertAlmostEqual(p['qty']*p['entry_usd']/cfd.USD_PER_GBP_ASSUMED,1000,places=3)
+            self.assertGreater(p['planned_gross_stop_risk_gbp'],5)
     def test_missing_opening_premarket_wick_and_continuation_rejected(self):
         h=history(); self.assertEqual(cfd.direction_signal(h[1:])[1],'missing_opening_range')
         h[0]['timestamp']-=300; self.assertIsNone(cfd.direction_signal(h)[0])
@@ -39,7 +39,7 @@ class TestOrb(unittest.TestCase):
         self.assertEqual(cfd.evaluate(book,'NVDA',[hit],later,allow_new=False),'closed_at_stop')
         self.assertEqual(book['trades'][0]['strategy'],'ORB_5M')
         again=history(now=NOW+timedelta(days=1))
-        self.assertIn('entry_long',cfd.evaluate(book,'NVDA',again,NOW+timedelta(days=1)))
+        self.assertEqual(cfd.evaluate(book,'NVDA',again,NOW+timedelta(days=1)), 'insufficient_cash_for_fixed_position')
     def test_risk_locks_duplicate_and_one_per_symbol(self):
         book=cfd.initialize({})
         self.assertEqual(cfd.evaluate(book,'NVDA',history(),NOW,allow_new=False),'entries_paused')
@@ -64,6 +64,26 @@ class TestOrb(unittest.TestCase):
         selected = paper_engine.select_active_watchlist(NOW, {}, True, False, True, {})
         self.assertTrue(set(cfd.PROXY_SYMBOLS).issubset(selected))
         self.assertLessEqual(len(selected), paper_engine.MAX_API_SYMBOLS_PER_SCAN)
+
+    def test_fixed_size_requires_unreserved_cash(self):
+        for cash in (999.99, 0):
+            book=cfd.initialize({});book['cash_gbp']=cash
+            self.assertEqual(cfd.evaluate(book,'NVDA',history(),NOW),'insufficient_cash_for_fixed_position')
+            self.assertFalse(book['positions'])
+        book=cfd.initialize({})
+        self.assertEqual(cfd.evaluate(book,'NVDA',history(),NOW),'paper_cfd_proxy_entry_long')
+        self.assertEqual(cfd.evaluate(book,'AMD',history(),NOW),'insufficient_cash_for_fixed_position')
+        self.assertEqual(book['cash_gbp'],1000)
+        book=cfd.initialize({});book['cash_gbp']=2000
+        for ticker in ('NVDA','AMD'):
+            self.assertEqual(cfd.evaluate(book,ticker,history(),NOW),'paper_cfd_proxy_entry_long')
+        self.assertEqual(cfd.evaluate(book,'TSLA',history(),NOW),'cfd_position_limit')
+
+    def test_three_daily_entries_remain_the_limit(self):
+        book=cfd.initialize({});book['cash_gbp']=3000
+        book['trades']=[dict(ticker=str(i),entry_day='2026-11-09',exit_day='2026-11-09',pnl_gbp=1) for i in range(3)]
+        self.assertEqual(cfd.evaluate(book,'NVDA',history(),NOW),'cfd_daily_risk_halt')
+        self.assertEqual(cfd.MAX_ENTRIES_DAY,3)
 
     def test_entry_cutoff_and_missing_volume(self):
         self.assertEqual(cfd.evaluate(cfd.initialize({}),'NVDA',history(),NOW.replace(hour=16)),'stale_underlying_quote')
