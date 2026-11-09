@@ -1,12 +1,13 @@
-"""Isolated educational CFD-*style* stock proxy simulator. No CFD feed or orders.
+"""Isolated educational CFD-style share and spot-gold simulator. No broker orders.
 
-Uses limited-venue underlying US stock OHLC bars, NOT Trading 212 CFD bid/ask
+Uses underlying stock and indicative spot-gold OHLC bars, NOT Trading 212 CFD bid/ask
 quotes. Never describes these simulated fills as executable broker prices.
 """
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 PROXY_SYMBOLS = ("NVDA", "TSLA", "AMD")
+GOLD_SYMBOL = "XAU/USD"
 START_BALANCE_GBP = 1000.0  # Separate research ledger, not added to the stock account.
 MAX_POSITIONS = 2
 POSITION_GBP = 1000.0
@@ -43,7 +44,9 @@ def initialize(state):
     book["entry_mode"] = "recurring_paper_sessions"
     book["position_value_gbp"] = POSITION_GBP
     book["sizing_mode"] = "fixed_notional_skip_if_underfunded"
-    book["source"] = "UNDERLYING_US_SHARE_PROXY_NOT_BROKER_CFD_QUOTE"
+    book["source"] = "SHARE_AND_SPOT_GOLD_PROXIES_NOT_BROKER_CFD_QUOTES"
+    book["gold_strategy"] = "NY_0930_ORB_5M_WITH_EURUSD_DIRECTION_FILTER"
+    book["gold_macro_coverage"] = "EURUSD_PROXY_ONLY_NO_NEWS_OR_REAL_YIELD_FEED"
     book["execution"] = "SIMULATED_ONLY_NO_LEVERAGE_NO_BROKER_ORDERS"
     book["separate_research_account"] = True
     book["starting_balance_gbp"] = START_BALANCE_GBP
@@ -63,7 +66,7 @@ def opening_range(bars):
     return None
 
 
-def direction_signal(bars):
+def direction_signal(bars, *, require_volume=True):
     """Five-minute ORB: fresh crossing on a completed regular-session bar."""
     opening = opening_range(bars)
     if opening is None:
@@ -74,7 +77,7 @@ def direction_signal(bars):
         return None, "outside_orb_entry_window"
     if len(bars) < 2 or bars[-2]["timestamp"] != bar["timestamp"] - 300:
         return None, "missing_previous_candle"
-    if float(bar.get("volume") or 0) <= 0 or float(opening.get("volume") or 0) <= 0:
+    if require_volume and (float(bar.get("volume") or 0) <= 0 or float(opening.get("volume") or 0) <= 0):
         return None, "missing_share_volume"
     previous = bars[-2]["close"]
     if previous <= opening["high"] < bar["close"]:
@@ -118,7 +121,7 @@ def close(book, ticker, bar, reason):
         "exit_day": exit_day.isoformat(), "entry_usd": pos["entry_usd"],
         "exit_usd": mid_exit, "qty": pos["qty"], "pnl_gbp": pnl,
         "reason": reason, "estimated_cost_gbp": round(fees, 2),
-        "quote_type": "underlying_stock_proxy",
+        "quote_type": pos.get("quote_type", "underlying_stock_proxy"),
         "exit_utc": datetime.fromtimestamp(bar["timestamp"], timezone.utc).isoformat(),
     }
     book["trades"].append(trade)
@@ -126,9 +129,9 @@ def close(book, ticker, bar, reason):
     return trade
 
 
-def evaluate(book, ticker, bars, now, *, allow_new=True):
-    """Update one share-CFD proxy from complete fresh underlying 5m bars."""
-    if ticker not in PROXY_SYMBOLS:
+def evaluate(book, ticker, bars, now, *, allow_new=True, dollar_bars=None):
+    """Update one paper share/gold proxy from complete fresh 5m bars."""
+    if ticker not in (*PROXY_SYMBOLS, GOLD_SYMBOL):
         return "not_cfd_proxy"
     if not bars:
         return "no_bars"
@@ -211,9 +214,13 @@ def evaluate(book, ticker, bars, now, *, allow_new=True):
         return "cfd_position_limit"
     if ticker in traded:
         return "already_traded_today"
-    side, reason = direction_signal(completed)
+    side, reason = direction_signal(completed, require_volume=ticker != GOLD_SYMBOL)
     if not side:
         return reason
+    if ticker == GOLD_SYMBOL:
+        confirmed, reason = gold_dollar_confirmation(dollar_bars or [], latest["timestamp"], side)
+        if not confirmed:
+            return reason
     entry = float(latest["close"])
     opening = opening_range(completed)
     stop = float(opening["low"] if side == "long" else opening["high"])
@@ -236,10 +243,31 @@ def evaluate(book, ticker, bars, now, *, allow_new=True):
         "side": side, "entry_day": today, "entry_timestamp": latest["timestamp"],
         "entry_usd": entry, "stop_usd": round(stop, 5),
         "target_usd": round(target, 5), "qty": qty,
-        "quote_type": "underlying_stock_proxy", "leverage": 1.0,
+        "quote_type": "indicative_spot_gold" if ticker == GOLD_SYMBOL else "underlying_stock_proxy", "leverage": 1.0,
+        "macro_filter": "EURUSD_30M_DIRECTION_PROXY" if ticker == GOLD_SYMBOL else None,
         "requested_notional_gbp": POSITION_GBP,
         "entry_notional_gbp": entry * qty / USD_PER_GBP_ASSUMED,
         "planned_gross_stop_risk_gbp": distance * qty / USD_PER_GBP_ASSUMED,
     }
     return "paper_cfd_proxy_entry_" + side
 
+
+
+def gold_dollar_confirmation(bars, signal_timestamp, side):
+    """EUR/USD is a narrow dollar-direction proxy, NOT DXY, yields or news.
+
+    Only use seven consecutive completed bars ending at the gold signal bar.
+    EUR/USD rising supports long gold; falling supports short. Flat blocks both.
+    """
+    from math import isfinite
+    by_time = {b["timestamp"]: b for b in bars if b["timestamp"] <= signal_timestamp}
+    stamps = [signal_timestamp - 300 * i for i in range(6, -1, -1)]
+    if any(t not in by_time for t in stamps):
+        return False, "gold_missing_aligned_dollar_data"
+    closes = [float(by_time[t]["close"]) for t in stamps]
+    if any(not isfinite(c) or c <= 0 for c in closes):
+        return False, "gold_invalid_dollar_data"
+    change = closes[-1] / closes[0] - 1
+    if (side == "long" and change > 0) or (side == "short" and change < 0):
+        return True, "gold_dollar_proxy_confirmed"
+    return False, "gold_dollar_proxy_not_aligned"

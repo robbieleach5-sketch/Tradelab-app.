@@ -158,9 +158,9 @@ def intraday_prices(ticker, market="US"):
     key = os.environ.get("TWELVE_DATA_API_KEY")
     if not key:
         raise RuntimeError("Missing GitHub Actions secret TWELVE_DATA_API_KEY")
-    if market not in ("US", "UK", "FX"):
+    if market not in ("US", "UK", "FX", "GOLD"):
         raise ValueError("Unsupported exchange")
-    tz_name = "Europe/London" if market == "UK" else "UTC" if market == "FX" else "America/New_York"
+    tz_name = "Europe/London" if market == "UK" else "UTC" if market in ("FX", "GOLD") else "America/New_York"
     params = {"symbol": ticker, "interval": "5min",
               "outputsize": 90, "timezone": tz_name}
     if market == "UK":
@@ -173,10 +173,10 @@ def intraday_prices(ticker, market="US"):
     if payload.get("status") == "error" or "values" not in payload:
         raise ValueError("Twelve Data: " + str(payload.get("message", "No bars returned"))[:130])
     multiplier = 1.0
-    if market == "FX":
+    if market in ("FX", "GOLD"):
         provider_symbol = str((payload.get("meta") or {}).get("symbol") or "")
-        if provider_symbol and provider_symbol.upper() != ticker.upper():
-            raise ValueError("Forex provider returned a different currency pair")
+        if (market == "GOLD" and not provider_symbol) or (provider_symbol and provider_symbol.upper() != ticker.upper()):
+            raise ValueError("Provider returned a missing or different instrument symbol")
     if market == "UK":
         meta = payload.get("meta") or {}
         venue = str(meta.get("exchange") or "").lower()
@@ -193,7 +193,8 @@ def intraday_prices(ticker, market="US"):
         try:
             stamp = datetime.strptime(item["datetime"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
             o, h, low, close = (float(item[k]) * multiplier for k in ("open", "high", "low", "close"))
-            if min(o, h, low, close) > 0:
+            from math import isfinite
+            if all(isfinite(v) and v > 0 for v in (o, h, low, close)) and low <= min(o, close) <= max(o, close) <= h:
                 rows.append({"timestamp": int(stamp.timestamp()), "open": o,
                              "high": h, "low": low, "close": close,
                              "volume": float(item.get("volume") or 0)})
@@ -293,7 +294,7 @@ def select_active_watchlist(now, positions, us_active, uk_active, fx_active=Fals
     # to consume two slots on every scan, crowding out other candidates.
     us_priority = [
         symbol for symbol in cfd.get("positions", {})
-        if symbol in cfd_proxy_paper.PROXY_SYMBOLS and symbol not in positions
+        if symbol in (*cfd_proxy_paper.PROXY_SYMBOLS, cfd_proxy_paper.GOLD_SYMBOL) and symbol not in positions
     ] if us_active else []
     # Check the ORB universe each opening-window scan within the same API budget.
     from zoneinfo import ZoneInfo
@@ -307,7 +308,15 @@ def select_active_watchlist(now, positions, us_active, uk_active, fx_active=Fals
                and ino_request_status(now, scan_state or {}) == "queued_for_confirmed_us_breakout"
                and INO_PAPER_TICKER not in positions else [])
     # Monitor every FX pair when possible. Spare credits support other exchanges.
-    chosen = fx_candidates[:min(FOREX_CANDIDATES_PER_SCAN, remaining)]
+    # Gold and its dollar proxy share the existing eight-request budget.
+    # Held demo positions precede new gold candidates and FX candidates.
+    gold_candidates = ([cfd_proxy_paper.GOLD_SYMBOL, "EUR/USD"]
+                       if us_active and os.environ.get("TWELVE_DATA_API_KEY") else [])
+    held_demo = [s for s in us_priority if s in cfd.get("positions", {})]
+    chosen = []
+    for symbol in held_demo + gold_candidates + fx_candidates[:FOREX_CANDIDATES_PER_SCAN]:
+        if symbol not in opened and symbol not in chosen and len(chosen) < remaining:
+            chosen.append(symbol)
     for candidate_list, cap in ((special, MAX_API_SYMBOLS_PER_SCAN),
                                  (us_priority, MAX_API_SYMBOLS_PER_SCAN),
                                  (uk_candidates, 2 if us_active else UK_CANDIDATES_PER_SCAN),
@@ -703,6 +712,7 @@ def main(now=None):
         state["us_market_session_open"] = False
         state["uk_market_session_open"] = False
         state["forex_session_open"] = False
+        cfd_book["gold_status"] = "outside_us_session_or_no_data_key"
         state["model"] = ("TradeLab paper simulator on standby. US shares require the US open; "
                           "UK entries require an explicitly enabled licensed live UK feed.")
         STATE.parent.mkdir(parents=True, exist_ok=True)
@@ -720,28 +730,35 @@ def main(now=None):
               "uk_feed_status": state["uk_feed_status"],
               "checked": list(watchlist), "outcomes": {}, "new_paper_entries": [],
               "cfd_proxy_outcomes": {}, "early_watch": []}
+    scan_bars = {}
     for ticker in watchlist:
         try:
-            market = "FX" if ticker in FOREX_SYMBOLS else "UK" if ticker in UK_FOCUS_SYMBOLS else "US"
+            market = "GOLD" if ticker == cfd_proxy_paper.GOLD_SYMBOL else "FX" if ticker in FOREX_SYMBOLS else "UK" if ticker in UK_FOCUS_SYMBOLS else "US"
             rows = intraday_prices(ticker, market=market) if market != "US" else intraday_prices(ticker)
             # Only fully completed candles; provider may include an unfinished current candle.
             completed = [b for b in rows if b["timestamp"] + 300 <= int(now.timestamp()) - 30]
             if not completed:
                 raise ValueError("No completed 5-minute candles")
+            scan_bars[ticker] = completed
             bar = completed[-1]
             bar_time = datetime.fromtimestamp(bar["timestamp"], timezone.utc)
             local_bar = bar_time.astimezone(ZoneInfo("Europe/London") if market in ("UK", "FX") else ZoneInfo("America/New_York"))
             today_local = uk.date() if market in ("UK", "FX") else ny.date()
             state["quotes"][ticker] = {"date": bar_time.isoformat(), "close_usd": round(bar["close"], 6 if market == "FX" else 4),
                                        "currency": "GBP" if market == "UK" else "USD",
-                                       "asset_class": "forex" if market == "FX" else "equity",
-                                       "source": "Twelve Data 5-minute forex (indicative mid)" if market == "FX"
+                                       "asset_class": "commodity" if market == "GOLD" else "forex" if market == "FX" else "equity",
+                                       "source": "Twelve Data spot gold (indicative, not broker CFD)" if market == "GOLD"
+                                                 else "Twelve Data 5-minute forex (indicative mid)" if market == "FX"
                                                  else "Twelve Data 5-minute bars (LSE live entitlement)" if market == "UK"
                                                  else "Alpaca IEX 5-minute bars (single exchange)" if provider == "alpaca"
                                                  else "Twelve Data 5-minute bars (limited-venue US feed)"}
             state["quotes"][ticker]["is_fresh"] = (
                 local_bar.date() == today_local and
                 timedelta(0) <= now - bar_time <= timedelta(minutes=25))
+            # Gold belongs only to the CFD demo ledger, evaluated after EUR/USD.
+            if market == "GOLD":
+                state["errors"].pop(ticker, None)
+                continue
             # Never trade old candles or repeat a previously processed candle.
             if local_bar.date() != today_local or not timedelta(0) <= (now - bar_time) <= timedelta(minutes=25):
                 report["outcomes"][ticker] = "stale_or_outside_session"
@@ -830,6 +847,18 @@ def main(now=None):
         except Exception as exc:
             report["outcomes"][ticker] = "provider_error"
             state["errors"][ticker] = str(exc)[:200]
+    if cfd_proxy_paper.GOLD_SYMBOL in watchlist:
+        _, primary_realized, _ = daily_limits(state, ny.date())
+        outcome = (cfd_proxy_paper.evaluate(
+            cfd_book, cfd_proxy_paper.GOLD_SYMBOL, scan_bars[cfd_proxy_paper.GOLD_SYMBOL], now,
+            allow_new=primary_realized > -DAILY_LOSS_LIMIT_GBP,
+            dollar_bars=scan_bars.get("EUR/USD", []))
+            if cfd_proxy_paper.GOLD_SYMBOL in scan_bars else "gold_feed_unavailable")
+        report["cfd_proxy_outcomes"][cfd_proxy_paper.GOLD_SYMBOL] = outcome
+        report["outcomes"][cfd_proxy_paper.GOLD_SYMBOL] = outcome
+        cfd_book["gold_status"] = outcome
+    else:
+        cfd_book["gold_status"] = "outside_us_session_or_no_data_key"
     entries_today, realized_today, _ = daily_limits(state, ny.date())
     # Ranked research alerts only; these never alter paper position decisions.
     report["early_watch"].sort(key=lambda item: (item["distance_to_trigger_pct"], -item["volume_multiple"]))

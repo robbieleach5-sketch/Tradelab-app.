@@ -1,0 +1,44 @@
+name: Gold data availability check
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/gold-feed-check.yml
+permissions:
+  contents: read
+concurrency:
+  group: tradelab-paper-engine
+  cancel-in-progress: false
+jobs:
+  gold-feed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check gold data without trades
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import datetime, timezone
+          from scripts.paper_engine import intraday_prices
+          try:
+              rows = intraday_prices('XAU/USD', market='GOLD')
+              last = rows[-1]
+              stamp = datetime.fromtimestamp(last['timestamp'], timezone.utc)
+              summary = 'Gold feed available. Latest bar: ' + stamp.isoformat() + '. No trades placed.'
+          except Exception as exc:
+              # Never log request headers or credentials.
+              message = str(exc).replace(os.environ.get('TWELVE_DATA_API_KEY') or '\x00', '[redacted]')
+              summary = 'Gold feed unavailable: ' + message[:200] + '. No trades placed.'
+              print(summary)
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+                  f.write(summary + '\n')
+              raise SystemExit(1)
+          print(summary)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write(summary + '\n')
+          PY
